@@ -14,9 +14,12 @@ DATA_DIR = ROOT / "data"
 UPLOADS_DIR = DATA_DIR / "uploads"
 PAGES_DIR = DATA_DIR / "pages"
 CROPS_DIR = DATA_DIR / "crops"
+LIBRARY_DIR = DATA_DIR / "library"
+INFO_BLOCK_DIR = LIBRARY_DIR / "Info Block"
+DRAWING_DIR = LIBRARY_DIR / "Drawing"
 DB_PATH = DATA_DIR / "sheetsense.db"
 
-for path in (UPLOADS_DIR, PAGES_DIR, CROPS_DIR):
+for path in (UPLOADS_DIR, PAGES_DIR, CROPS_DIR, INFO_BLOCK_DIR, DRAWING_DIR):
     path.mkdir(parents=True, exist_ok=True)
 
 _lock = threading.Lock()
@@ -84,6 +87,18 @@ def init_db() -> None:
                 fields_json TEXT NOT NULL,
                 method TEXT NOT NULL,
                 created_at TEXT NOT NULL,
+                FOREIGN KEY(page_id) REFERENCES pages(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS segments (
+                id TEXT PRIMARY KEY,
+                page_id TEXT NOT NULL,
+                kind TEXT NOT NULL,
+                folder TEXT NOT NULL,
+                filename TEXT NOT NULL,
+                relative_path TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                UNIQUE(page_id, kind),
                 FOREIGN KEY(page_id) REFERENCES pages(id)
             );
             """

@@ -1,8 +1,9 @@
-.venv/
-__pycache__/
-*.pyc
 data/uploads/
 data/pages/
 data/crops/
+data/library/
 data/*.db
+.venv/
+__pycache__/
+*.pyc
 .pytest_cache/

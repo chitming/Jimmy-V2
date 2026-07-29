@@ -314,11 +314,18 @@ button {
   border-radius: 999px;
   padding: 4px 8px;
   color: var(--muted);
+  background: transparent;
 }
 
 .pill.on {
   color: var(--accent);
   border-color: rgba(46, 196, 182, 0.45);
+}
+
+code {
+  font-family: var(--font-mono);
+  font-size: 0.86em;
+  color: var(--accent-2);
 }
 
 .workspace {

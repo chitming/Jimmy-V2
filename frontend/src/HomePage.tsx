@@ -46,6 +46,9 @@ export function HomePage() {
           <div className="brand-sub">Technical drawing layout teacher</div>
         </div>
         <div className="nav-actions">
+          <Link className="btn btn-ghost" to="/library">
+            Segment library
+          </Link>
           <button className="btn btn-primary" disabled={busy} onClick={() => inputRef.current?.click()}>
             {busy ? 'Uploading…' : 'Upload drawing'}
           </button>
@@ -92,12 +95,12 @@ export function HomePage() {
               <span>Pages taught</span>
             </div>
             <div className="stat-card">
-              <strong>{stats?.extracted ?? 0}</strong>
-              <span>Info blocks read</span>
+              <strong>{stats?.info_block_segments ?? 0}</strong>
+              <span>Info Block JPGs</span>
             </div>
             <div className="stat-card">
-              <strong>{stats?.pages ?? 0}</strong>
-              <span>Pages ready</span>
+              <strong>{stats?.drawing_segments ?? 0}</strong>
+              <span>Drawing JPGs</span>
             </div>
           </div>
         </aside>

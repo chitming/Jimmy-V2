@@ -35,14 +35,18 @@ FIELD_PATTERNS = {
 
 
 def crop_box(image_path: Path, box: dict, out_path: Path) -> Path:
+    out_path.parent.mkdir(parents=True, exist_ok=True)
     with Image.open(image_path) as img:
         width, height = img.size
         left = max(0, int(box["x"] * width))
         top = max(0, int(box["y"] * height))
         right = min(width, int((box["x"] + box["w"]) * width))
         bottom = min(height, int((box["y"] + box["h"]) * height))
-        crop = img.crop((left, top, right, bottom))
-        crop.save(out_path)
+        crop = img.crop((left, top, right, bottom)).convert("RGB")
+        if out_path.suffix.lower() in {".jpg", ".jpeg"}:
+            crop.save(out_path, format="JPEG", quality=92, optimize=True)
+        else:
+            crop.save(out_path)
     return out_path
 
 
@@ -92,8 +96,10 @@ def extract_information_block(
     page_index: int,
     page_width: int,
     page_height: int,
+    reuse_crop: bool = False,
 ) -> dict:
-    crop_box(image_path, box, crop_path)
+    if not reuse_crop or not crop_path.exists():
+        crop_box(image_path, box, crop_path)
     method = "ocr"
     raw_text = ""
 

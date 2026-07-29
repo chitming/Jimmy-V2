@@ -67,7 +67,7 @@ export function TeachPage() {
       await saveAnnotation(pageId, info, canvas)
       const refreshed = await getPage(pageId)
       setPage(refreshed)
-      setMessage('Saved. SheetSense learned this layout.')
+      setMessage('Saved. JPG segments stored in Info Block and Drawing folders.')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Save failed')
     } finally {
@@ -131,6 +131,9 @@ export function TeachPage() {
         <div className="nav-actions">
           <Link className="btn btn-ghost" to="/">
             Library
+          </Link>
+          <Link className="btn btn-ghost" to="/library">
+            Segments
           </Link>
           <button className="btn" disabled={!canSave || busy} onClick={() => void onSave()}>
             Save teaching
@@ -196,6 +199,22 @@ export function TeachPage() {
 
         <aside className="panel">
           <h2>Extracted fields</h2>
+          {page.annotation?.segments && (
+            <div className="field-list" style={{ marginBottom: 14 }}>
+              {page.annotation.segments.info_block && (
+                <div className="field">
+                  <label>Info Block JPG</label>
+                  <div>{page.annotation.segments.info_block.filename}</div>
+                </div>
+              )}
+              {page.annotation.segments.drawing && (
+                <div className="field">
+                  <label>Drawing JPG</label>
+                  <div>{page.annotation.segments.drawing.filename}</div>
+                </div>
+              )}
+            </div>
+          )}
           {!page.extraction && (
             <p className="help">Save both regions, then extract. Vector PDFs use native text when possible.</p>
           )}

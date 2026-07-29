@@ -34,6 +34,29 @@ export type Suggestion = {
   method: string
 }
 
+export type Stats = {
+  drawings: number
+  pages: number
+  labeled: number
+  extracted: number
+  info_block_segments: number
+  drawing_segments: number
+}
+
+export type LibraryItem = {
+  id: string
+  page_id: string
+  drawing_id: string
+  kind: 'info_block' | 'drawing'
+  folder: string
+  filename: string
+  source_filename: string
+  page_index: number
+  created_at: string
+  exists: boolean
+  url: string
+}
+
 export type PageDetail = {
   id: string
   drawing_id: string
@@ -48,6 +71,7 @@ export type PageDetail = {
     information_block: Box
     drawing_canvas: Box
     updated_at: string
+    segments?: Record<string, { folder: string; filename: string; url: string }>
   } | null
   extraction: {
     raw_text: string
@@ -57,13 +81,6 @@ export type PageDetail = {
     created_at: string
   } | null
   suggestion: Suggestion | null
-}
-
-export type Stats = {
-  drawings: number
-  pages: number
-  labeled: number
-  extracted: number
 }
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
@@ -114,8 +131,17 @@ export function saveAnnotation(pageId: string, information_block: Box, drawing_c
 }
 
 export function extractPage(pageId: string) {
-  return request<PageDetail['extraction'] & { id: string; page_id: string }>(
+  return request<PageDetail['extraction'] & { id: string; page_id: string; library_folder?: string }>(
     `/api/pages/${pageId}/extract`,
     { method: 'POST' },
   )
+}
+
+export function getLibrary(kind?: 'info_block' | 'drawing') {
+  const query = kind ? `?kind=${kind}` : ''
+  return request<{
+    folders: string[]
+    counts: { info_block: number; drawing: number }
+    items: LibraryItem[]
+  }>(`/api/library${query}`)
 }

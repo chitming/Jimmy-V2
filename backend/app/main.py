@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 
 from .db import (
     CROPS_DIR,
+    LIBRARY_DIR,
     PAGES_DIR,
     UPLOADS_DIR,
     connect,
@@ -21,6 +22,7 @@ from .db import (
     utc_now,
 )
 from .services.layout import compute_phash, labeled_count, predict_layout
+from .services.library import get_segment_path, library_counts, list_library, save_page_segments
 from .services.ocr import extract_information_block
 from .services.render import render_pdf_pages, save_image_as_page
 
@@ -36,6 +38,7 @@ app.add_middleware(
 
 app.mount("/media/pages", StaticFiles(directory=PAGES_DIR), name="pages")
 app.mount("/media/crops", StaticFiles(directory=CROPS_DIR), name="crops")
+app.mount("/media/library", StaticFiles(directory=LIBRARY_DIR), name="library")
 
 
 class Box(BaseModel):
@@ -67,11 +70,26 @@ def stats() -> dict:
         pages = conn.execute("SELECT COUNT(*) AS c FROM pages").fetchone()["c"]
         labeled = conn.execute("SELECT COUNT(*) AS c FROM annotations").fetchone()["c"]
         extracted = conn.execute("SELECT COUNT(*) AS c FROM extractions").fetchone()["c"]
+    counts = library_counts()
     return {
         "drawings": drawings,
         "pages": pages,
         "labeled": labeled,
         "extracted": extracted,
+        "info_block_segments": counts["info_block"],
+        "drawing_segments": counts["drawing"],
+    }
+
+
+@app.get("/api/library")
+def get_library(kind: str | None = None) -> dict:
+    if kind is not None and kind not in {"info_block", "drawing"}:
+        raise HTTPException(400, "kind must be info_block or drawing")
+    items = list_library(kind)
+    return {
+        "folders": ["Info Block", "Drawing"],
+        "counts": library_counts(),
+        "items": items,
     }
 
 
@@ -224,17 +242,37 @@ def get_page(page_id: str) -> dict:
     }
 
     if annotation:
+        with connect() as conn:
+            segs = conn.execute(
+                "SELECT kind, folder, filename, relative_path FROM segments WHERE page_id = ?",
+                (page_id,),
+            ).fetchall()
+        segment_map = {
+            row["kind"]: {
+                "folder": row["folder"],
+                "filename": row["filename"],
+                "url": f"/media/library/{row['folder']}/{row['filename']}",
+            }
+            for row in segs
+        }
         payload["annotation"] = {
             "information_block": loads(annotation["information_block"]),
             "drawing_canvas": loads(annotation["drawing_canvas"]),
             "updated_at": annotation["updated_at"],
+            "segments": segment_map,
         }
     if extraction:
+        info_seg = get_segment_path(page_id, "info_block")
+        crop_url = (
+            f"/media/library/Info Block/{info_seg.name}"
+            if info_seg is not None
+            else f"/media/crops/{page_id}.png"
+        )
         payload["extraction"] = {
             "raw_text": extraction["raw_text"],
             "fields": loads(extraction["fields_json"]),
             "method": extraction["method"],
-            "crop_url": f"/media/crops/{page_id}.png",
+            "crop_url": crop_url,
             "created_at": extraction["created_at"],
         }
     return payload
@@ -244,9 +282,21 @@ def get_page(page_id: str) -> dict:
 def save_annotation(page_id: str, payload: AnnotationPayload) -> dict:
     now = utc_now()
     with connect() as conn:
-        page = conn.execute("SELECT id FROM pages WHERE id = ?", (page_id,)).fetchone()
+        page = conn.execute(
+            """
+            SELECT p.*, d.filename AS source_filename
+            FROM pages p
+            JOIN drawings d ON d.id = p.drawing_id
+            WHERE p.id = ?
+            """,
+            (page_id,),
+        ).fetchone()
         if page is None:
             raise HTTPException(404, "Page not found")
+
+        image_path = Path(page["image_path"])
+        source_filename = page["source_filename"]
+        page_index = int(page["page_index"])
 
         existing = conn.execute(
             "SELECT id FROM annotations WHERE page_id = ?", (page_id,)
@@ -280,12 +330,25 @@ def save_annotation(page_id: str, payload: AnnotationPayload) -> dict:
             (page_id,),
         )
 
+    segments = save_page_segments(
+        page_id=page_id,
+        image_path=image_path,
+        original_filename=source_filename,
+        page_index=page_index,
+        information_block=info,
+        drawing_canvas=canvas,
+    )
+
     return {
         "id": annotation_id,
         "page_id": page_id,
         "information_block": info,
         "drawing_canvas": canvas,
         "labeled_total": labeled_count(),
+        "library": {
+            "info_block": segments["info_block"],
+            "drawing": segments["drawing"],
+        },
     }
 
 
@@ -318,15 +381,32 @@ def extract_page(page_id: str) -> dict:
     upload_files = list(UPLOADS_DIR.glob(f"{page['drawing_id']}.*"))
     pdf_path = next((p for p in upload_files if p.suffix.lower() == ".pdf"), None)
 
+    # Prefer the library JPG; fall back to a temporary crop path.
+    library_info = get_segment_path(page_id, "info_block")
+    if library_info is None:
+        canvas_box = loads(annotation["drawing_canvas"])
+        save_page_segments(
+            page_id=page_id,
+            image_path=Path(page["image_path"]),
+            original_filename=drawing["filename"],
+            page_index=page["page_index"],
+            information_block=info_box,
+            drawing_canvas=canvas_box,
+        )
+        library_info = get_segment_path(page_id, "info_block")
+
+    crop_path = library_info if library_info is not None else CROPS_DIR / f"{page_id}.jpg"
+
     result = extract_information_block(
         image_path=Path(page["image_path"]),
         box=info_box,
-        crop_path=CROPS_DIR / f"{page_id}.png",
+        crop_path=crop_path,
         source_type=page["source_type"],
         pdf_path=pdf_path,
         page_index=page["page_index"],
         page_width=page["width"],
         page_height=page["height"],
+        reuse_crop=library_info is not None,
     )
 
     now = utc_now()
@@ -378,7 +458,12 @@ def extract_page(page_id: str) -> dict:
         "raw_text": result["raw_text"],
         "fields": result["fields"],
         "method": result["method"],
-        "crop_url": f"/media/crops/{page_id}.png",
+        "crop_url": (
+            f"/media/library/Info Block/{library_info.name}"
+            if library_info is not None
+            else f"/media/crops/{page_id}.jpg"
+        ),
+        "library_folder": "Info Block",
     }
 
 

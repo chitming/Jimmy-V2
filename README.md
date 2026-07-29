@@ -9,7 +9,10 @@ Teachable layout software for technical drawings.
    - **Information block** (title block / company info)
    - **Drawing canvas** (main geometry area)
 3. SheetSense learns from your teaching and suggests those regions on the next similar sheet
-4. Extract text from the information block (native PDF text when available, OCR otherwise)
+4. Every taught region is saved as a **JPG** into a segment library:
+   - `backend/data/library/Info Block/`
+   - `backend/data/library/Drawing/`
+5. Extract text from the information block (native PDF text when available, OCR otherwise)
 
 ## Quick start
 
@@ -35,6 +38,20 @@ npm run dev
 
 Open http://localhost:5173
 
+## Segment library
+
+When you click **Save teaching**, SheetSense crops both boxes and stores:
+
+```text
+backend/data/library/
+  Info Block/
+    MyDrawing_p1_page_abc123.jpg
+  Drawing/
+    MyDrawing_p1_page_abc123.jpg
+```
+
+Browse them in the app at `/library`.
+
 ## How learning works (v1)
 
 No cloud vision account required for the first version.
@@ -42,8 +59,7 @@ No cloud vision account required for the first version.
 - Each taught page stores normalized boxes + a perceptual image hash
 - New pages get a **few-shot suggestion** from the nearest previously taught sheets
 - You accept or correct the boxes → the memory improves
-
-This is intentional: with only two labels, the product becomes useful after the first taught drawing.
+- Corrected boxes overwrite the JPG segments in the library folders
 
 ## Project layout
 
