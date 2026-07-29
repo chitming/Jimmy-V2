@@ -1,0 +1,13 @@
+# Runtime / local
+backend/.venv/
+backend/data/uploads/
+backend/data/pages/
+backend/data/crops/
+backend/data/*.db
+frontend/node_modules/
+frontend/dist/
+__pycache__/
+*.pyc
+.DS_Store
+.env
+.env.*

@@ -1,0 +1,393 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, Field
+
+from .db import (
+    CROPS_DIR,
+    PAGES_DIR,
+    UPLOADS_DIR,
+    connect,
+    dumps,
+    init_db,
+    loads,
+    new_id,
+    row_to_dict,
+    utc_now,
+)
+from .services.layout import compute_phash, labeled_count, predict_layout
+from .services.ocr import extract_information_block
+from .services.render import render_pdf_pages, save_image_as_page
+
+app = FastAPI(title="SheetSense API", version="0.1.0")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.mount("/media/pages", StaticFiles(directory=PAGES_DIR), name="pages")
+app.mount("/media/crops", StaticFiles(directory=CROPS_DIR), name="crops")
+
+
+class Box(BaseModel):
+    x: float = Field(ge=0, le=1)
+    y: float = Field(ge=0, le=1)
+    w: float = Field(gt=0, le=1)
+    h: float = Field(gt=0, le=1)
+
+
+class AnnotationPayload(BaseModel):
+    information_block: Box
+    drawing_canvas: Box
+
+
+@app.on_event("startup")
+def startup() -> None:
+    init_db()
+
+
+@app.get("/api/health")
+def health() -> dict:
+    return {"ok": True, "labeled_pages": labeled_count()}
+
+
+@app.get("/api/stats")
+def stats() -> dict:
+    with connect() as conn:
+        drawings = conn.execute("SELECT COUNT(*) AS c FROM drawings").fetchone()["c"]
+        pages = conn.execute("SELECT COUNT(*) AS c FROM pages").fetchone()["c"]
+        labeled = conn.execute("SELECT COUNT(*) AS c FROM annotations").fetchone()["c"]
+        extracted = conn.execute("SELECT COUNT(*) AS c FROM extractions").fetchone()["c"]
+    return {
+        "drawings": drawings,
+        "pages": pages,
+        "labeled": labeled,
+        "extracted": extracted,
+    }
+
+
+@app.post("/api/drawings/upload")
+async def upload_drawing(file: UploadFile = File(...)) -> dict:
+    if not file.filename:
+        raise HTTPException(400, "Missing filename")
+
+    suffix = Path(file.filename).suffix.lower()
+    if suffix not in {".pdf", ".jpg", ".jpeg", ".png", ".tif", ".tiff", ".webp"}:
+        raise HTTPException(400, "Supported types: PDF, JPG, PNG, TIF, WEBP")
+
+    drawing_id = new_id("dwg")
+    saved_name = f"{drawing_id}{suffix}"
+    dest = UPLOADS_DIR / saved_name
+    content = await file.read()
+    dest.write_bytes(content)
+
+    source_type = "pdf" if suffix == ".pdf" else "image"
+    if source_type == "pdf":
+        rendered = render_pdf_pages(dest, drawing_id)
+    else:
+        rendered = save_image_as_page(dest, drawing_id)
+
+    now = utc_now()
+    page_rows = []
+    with connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO drawings (id, filename, source_type, page_count, created_at)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (drawing_id, file.filename, source_type, len(rendered), now),
+        )
+        for page in rendered:
+            page_id = new_id("page")
+            phash = compute_phash(Path(page["image_path"]))
+            conn.execute(
+                """
+                INSERT INTO pages
+                (id, drawing_id, page_index, width, height, image_path, phash, status, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 'unlabeled', ?)
+                """,
+                (
+                    page_id,
+                    drawing_id,
+                    page["page_index"],
+                    page["width"],
+                    page["height"],
+                    page["image_path"],
+                    phash,
+                    now,
+                ),
+            )
+            page_rows.append(
+                {
+                    "id": page_id,
+                    "page_index": page["page_index"],
+                    "width": page["width"],
+                    "height": page["height"],
+                    "image_url": f"/media/pages/{Path(page['image_path']).name}",
+                    "status": "unlabeled",
+                }
+            )
+
+    return {
+        "id": drawing_id,
+        "filename": file.filename,
+        "source_type": source_type,
+        "page_count": len(page_rows),
+        "pages": page_rows,
+    }
+
+
+@app.get("/api/drawings")
+def list_drawings() -> dict:
+    with connect() as conn:
+        drawings = conn.execute(
+            "SELECT * FROM drawings ORDER BY created_at DESC"
+        ).fetchall()
+        result = []
+        for drawing in drawings:
+            pages = conn.execute(
+                """
+                SELECT p.*, a.id AS annotation_id, e.id AS extraction_id
+                FROM pages p
+                LEFT JOIN annotations a ON a.page_id = p.id
+                LEFT JOIN extractions e ON e.page_id = p.id
+                WHERE p.drawing_id = ?
+                ORDER BY p.page_index
+                """,
+                (drawing["id"],),
+            ).fetchall()
+            result.append(
+                {
+                    **row_to_dict(drawing),
+                    "pages": [
+                        {
+                            "id": p["id"],
+                            "page_index": p["page_index"],
+                            "width": p["width"],
+                            "height": p["height"],
+                            "image_url": f"/media/pages/{Path(p['image_path']).name}",
+                            "status": p["status"],
+                            "has_annotation": p["annotation_id"] is not None,
+                            "has_extraction": p["extraction_id"] is not None,
+                        }
+                        for p in pages
+                    ],
+                }
+            )
+    return {"drawings": result}
+
+
+@app.get("/api/pages/{page_id}")
+def get_page(page_id: str) -> dict:
+    with connect() as conn:
+        page = conn.execute(
+            """
+            SELECT p.*, d.filename, d.source_type, d.id AS drawing_id
+            FROM pages p
+            JOIN drawings d ON d.id = p.drawing_id
+            WHERE p.id = ?
+            """,
+            (page_id,),
+        ).fetchone()
+        if page is None:
+            raise HTTPException(404, "Page not found")
+
+        annotation = conn.execute(
+            "SELECT * FROM annotations WHERE page_id = ?", (page_id,)
+        ).fetchone()
+        extraction = conn.execute(
+            "SELECT * FROM extractions WHERE page_id = ?", (page_id,)
+        ).fetchone()
+
+    payload = {
+        "id": page["id"],
+        "drawing_id": page["drawing_id"],
+        "filename": page["filename"],
+        "source_type": page["source_type"],
+        "page_index": page["page_index"],
+        "width": page["width"],
+        "height": page["height"],
+        "image_url": f"/media/pages/{Path(page['image_path']).name}",
+        "status": page["status"],
+        "annotation": None,
+        "extraction": None,
+        "suggestion": predict_layout(page_id),
+    }
+
+    if annotation:
+        payload["annotation"] = {
+            "information_block": loads(annotation["information_block"]),
+            "drawing_canvas": loads(annotation["drawing_canvas"]),
+            "updated_at": annotation["updated_at"],
+        }
+    if extraction:
+        payload["extraction"] = {
+            "raw_text": extraction["raw_text"],
+            "fields": loads(extraction["fields_json"]),
+            "method": extraction["method"],
+            "crop_url": f"/media/crops/{page_id}.png",
+            "created_at": extraction["created_at"],
+        }
+    return payload
+
+
+@app.put("/api/pages/{page_id}/annotation")
+def save_annotation(page_id: str, payload: AnnotationPayload) -> dict:
+    now = utc_now()
+    with connect() as conn:
+        page = conn.execute("SELECT id FROM pages WHERE id = ?", (page_id,)).fetchone()
+        if page is None:
+            raise HTTPException(404, "Page not found")
+
+        existing = conn.execute(
+            "SELECT id FROM annotations WHERE page_id = ?", (page_id,)
+        ).fetchone()
+        info = payload.information_block.model_dump()
+        canvas = payload.drawing_canvas.model_dump()
+
+        if existing:
+            conn.execute(
+                """
+                UPDATE annotations
+                SET information_block = ?, drawing_canvas = ?, updated_at = ?
+                WHERE page_id = ?
+                """,
+                (dumps(info), dumps(canvas), now, page_id),
+            )
+            annotation_id = existing["id"]
+        else:
+            annotation_id = new_id("ann")
+            conn.execute(
+                """
+                INSERT INTO annotations
+                (id, page_id, information_block, drawing_canvas, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (annotation_id, page_id, dumps(info), dumps(canvas), now, now),
+            )
+
+        conn.execute(
+            "UPDATE pages SET status = 'labeled' WHERE id = ?",
+            (page_id,),
+        )
+
+    return {
+        "id": annotation_id,
+        "page_id": page_id,
+        "information_block": info,
+        "drawing_canvas": canvas,
+        "labeled_total": labeled_count(),
+    }
+
+
+@app.post("/api/pages/{page_id}/extract")
+def extract_page(page_id: str) -> dict:
+    with connect() as conn:
+        page = conn.execute(
+            """
+            SELECT p.*, d.source_type, d.id AS drawing_id
+            FROM pages p
+            JOIN drawings d ON d.id = p.drawing_id
+            WHERE p.id = ?
+            """,
+            (page_id,),
+        ).fetchone()
+        if page is None:
+            raise HTTPException(404, "Page not found")
+
+        annotation = conn.execute(
+            "SELECT * FROM annotations WHERE page_id = ?", (page_id,)
+        ).fetchone()
+        if annotation is None:
+            raise HTTPException(400, "Teach the information block before extracting")
+
+        drawing = conn.execute(
+            "SELECT * FROM drawings WHERE id = ?", (page["drawing_id"],)
+        ).fetchone()
+
+    info_box = loads(annotation["information_block"])
+    upload_files = list(UPLOADS_DIR.glob(f"{page['drawing_id']}.*"))
+    pdf_path = next((p for p in upload_files if p.suffix.lower() == ".pdf"), None)
+
+    result = extract_information_block(
+        image_path=Path(page["image_path"]),
+        box=info_box,
+        crop_path=CROPS_DIR / f"{page_id}.png",
+        source_type=page["source_type"],
+        pdf_path=pdf_path,
+        page_index=page["page_index"],
+        page_width=page["width"],
+        page_height=page["height"],
+    )
+
+    now = utc_now()
+    with connect() as conn:
+        existing = conn.execute(
+            "SELECT id FROM extractions WHERE page_id = ?", (page_id,)
+        ).fetchone()
+        if existing:
+            conn.execute(
+                """
+                UPDATE extractions
+                SET raw_text = ?, fields_json = ?, method = ?, created_at = ?
+                WHERE page_id = ?
+                """,
+                (
+                    result["raw_text"],
+                    dumps(result["fields"]),
+                    result["method"],
+                    now,
+                    page_id,
+                ),
+            )
+            extraction_id = existing["id"]
+        else:
+            extraction_id = new_id("ext")
+            conn.execute(
+                """
+                INSERT INTO extractions
+                (id, page_id, raw_text, fields_json, method, created_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    extraction_id,
+                    page_id,
+                    result["raw_text"],
+                    dumps(result["fields"]),
+                    result["method"],
+                    now,
+                ),
+            )
+        conn.execute(
+            "UPDATE pages SET status = 'extracted' WHERE id = ?",
+            (page_id,),
+        )
+
+    return {
+        "id": extraction_id,
+        "page_id": page_id,
+        "raw_text": result["raw_text"],
+        "fields": result["fields"],
+        "method": result["method"],
+        "crop_url": f"/media/crops/{page_id}.png",
+    }
+
+
+@app.get("/api/pages/{page_id}/image")
+def page_image(page_id: str):
+    with connect() as conn:
+        page = conn.execute(
+            "SELECT image_path FROM pages WHERE id = ?", (page_id,)
+        ).fetchone()
+    if page is None:
+        raise HTTPException(404, "Page not found")
+    return FileResponse(page["image_path"])
