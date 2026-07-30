@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
   extractPage,
   getPage,
@@ -22,6 +22,7 @@ const FIELD_LABELS: Record<string, string> = {
 
 export function TeachPage() {
   const { pageId = '' } = useParams()
+  const navigate = useNavigate()
   const [page, setPage] = useState<PageDetail | null>(null)
   const [tool, setTool] = useState<Tool>('information_block')
   const [info, setInfo] = useState<Box | null>(null)
@@ -98,6 +99,19 @@ export function TeachPage() {
     }
   }
 
+  async function onFinish() {
+    if (!pageId || !info || !canvas) return
+    setBusy(true)
+    setError(null)
+    try {
+      await saveAnnotation(pageId, info, canvas)
+      navigate('/')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not wrap up')
+      setBusy(false)
+    }
+  }
+
   if (error && !page) {
     return (
       <div className="app-shell">
@@ -141,6 +155,11 @@ export function TeachPage() {
           <button className="btn btn-primary" disabled={!canSave || busy} onClick={() => void onExtract()}>
             Extract info block
           </button>
+          {canSave && (
+            <button className="btn btn-finish" disabled={busy} onClick={() => void onFinish()}>
+              Finish & wrap up
+            </button>
+          )}
         </div>
       </header>
 

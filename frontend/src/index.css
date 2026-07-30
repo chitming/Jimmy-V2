@@ -143,6 +143,17 @@ button {
   background: transparent;
 }
 
+.btn-finish {
+  background: linear-gradient(135deg, #f4a259, #e07a3f);
+  border-color: transparent;
+  color: #2a1403;
+  font-weight: 650;
+}
+
+.btn-finish:hover {
+  border-color: transparent;
+}
+
 .btn:disabled {
   opacity: 0.45;
   cursor: not-allowed;
