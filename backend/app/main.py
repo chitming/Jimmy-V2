@@ -4,7 +4,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -20,6 +20,11 @@ from .db import (
     new_id,
     row_to_dict,
     utc_now,
+)
+from .services.info_block_excel import (
+    build_info_block_excel,
+    list_info_block_rows,
+    ocr_all_info_blocks,
 )
 from .services.layout import compute_phash, labeled_count, predict_layout
 from .services.library import get_segment_path, library_counts, list_library, save_page_segments
@@ -91,6 +96,45 @@ def get_library(kind: str | None = None) -> dict:
         "counts": library_counts(),
         "items": items,
     }
+
+
+@app.get("/api/info-blocks")
+def get_info_block_rows() -> dict:
+    rows = list_info_block_rows()
+    max_fields = max((row["field_count"] for row in rows), default=0)
+    return {
+        "count": len(rows),
+        "max_fields": max_fields,
+        "field_headers": [f"Field{i}" for i in range(1, max_fields + 1)],
+        "rows": rows,
+    }
+
+
+@app.post("/api/info-blocks/ocr")
+def run_info_block_ocr() -> dict:
+    result = ocr_all_info_blocks()
+    if result["processed"] == 0 and result["errors"]:
+        raise HTTPException(400, detail=result)
+    return result
+
+
+@app.get("/api/info-blocks/export.xlsx")
+def export_info_blocks_excel():
+    rows = list_info_block_rows()
+    if not rows:
+        raise HTTPException(
+            400,
+            "No Info Block OCR rows yet. Run OCR on the Info Block library first.",
+        )
+    content = build_info_block_excel()
+    headers = {
+        "Content-Disposition": 'attachment; filename="sheetsense_info_blocks.xlsx"'
+    }
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers=headers,
+    )
 
 
 @app.post("/api/drawings/upload")

@@ -101,6 +101,23 @@ def init_db() -> None:
                 UNIQUE(page_id, kind),
                 FOREIGN KEY(page_id) REFERENCES pages(id)
             );
+
+            CREATE TABLE IF NOT EXISTS info_block_rows (
+                id TEXT PRIMARY KEY,
+                segment_id TEXT NOT NULL UNIQUE,
+                page_id TEXT NOT NULL,
+                source_filename TEXT NOT NULL,
+                segment_filename TEXT NOT NULL,
+                page_index INTEGER NOT NULL,
+                raw_text TEXT NOT NULL,
+                fields_json TEXT NOT NULL,
+                field_count INTEGER NOT NULL,
+                method TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY(segment_id) REFERENCES segments(id),
+                FOREIGN KEY(page_id) REFERENCES pages(id)
+            );
             """
         )
 

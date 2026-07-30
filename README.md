@@ -52,6 +52,16 @@ backend/data/library/
 
 Browse them in the app at `/library`.
 
+## Stream A — Info Block → Excel
+
+On the Segment library page:
+
+1. Click **OCR Info Blocks**
+2. Text is stored as generic `Field1`, `Field2`, `Field3`, … (no assumed labels)
+3. Click **Download Excel** → `sheetsense_info_blocks.xlsx`
+
+Drawing understanding (Stream B) is not started yet.
+
 ## How learning works (v1)
 
 No cloud vision account required for the first version.

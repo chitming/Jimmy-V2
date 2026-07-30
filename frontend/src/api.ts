@@ -145,3 +145,64 @@ export function getLibrary(kind?: 'info_block' | 'drawing') {
     items: LibraryItem[]
   }>(`/api/library${query}`)
 }
+
+export type InfoBlockRow = {
+  id: string
+  segment_id: string
+  page_id: string
+  source_filename: string
+  segment_filename: string
+  page_index: number
+  raw_text: string
+  fields: Record<string, string>
+  field_count: number
+  method: string
+  created_at: string
+  updated_at: string
+  image_url: string
+}
+
+export function getInfoBlockRows() {
+  return request<{
+    count: number
+    max_fields: number
+    field_headers: string[]
+    rows: InfoBlockRow[]
+  }>('/api/info-blocks')
+}
+
+export function runInfoBlockOcr() {
+  return request<{
+    processed: number
+    errors: Array<{ segment_id: string; error: string }>
+    rows: Array<{
+      id: string
+      source_filename: string
+      field_count: number
+      fields: Record<string, string>
+    }>
+    all_rows: InfoBlockRow[]
+  }>('/api/info-blocks/ocr', { method: 'POST' })
+}
+
+export function downloadInfoBlockExcel() {
+  return fetch('/api/info-blocks/export.xlsx').then(async (res) => {
+    if (!res.ok) {
+      let detail = res.statusText
+      try {
+        const data = await res.json()
+        detail = data.detail || detail
+      } catch {
+        /* ignore */
+      }
+      throw new Error(typeof detail === 'string' ? detail : 'Excel export failed')
+    }
+    const blob = await res.blob()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'sheetsense_info_blocks.xlsx'
+    a.click()
+    URL.revokeObjectURL(url)
+  })
+}
