@@ -483,6 +483,30 @@ code {
   opacity: 0.85;
 }
 
+.box.pending {
+  border-style: dashed;
+}
+
+.box.accepted-box {
+  border-style: solid;
+}
+
+.status-banner {
+  margin: 12px 0 14px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(244, 162, 97, 0.45);
+  background: rgba(244, 162, 97, 0.08);
+  color: var(--ink);
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.status-banner.ok {
+  border-color: rgba(46, 196, 182, 0.45);
+  background: rgba(46, 196, 182, 0.1);
+}
+
 .box-label {
   position: absolute;
   top: -22px;

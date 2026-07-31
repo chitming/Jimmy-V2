@@ -50,11 +50,26 @@ def labeled_count() -> int:
         return int(row["c"])
 
 
+def default_aec_layout() -> dict:
+    """Cold-start proposal for AEC sheets when nothing has been taught yet.
+
+    Typical title/info block sits bottom-right; drawing canvas fills the rest.
+    """
+    return {
+        "information_block": {"x": 0.68, "y": 0.62, "w": 0.28, "h": 0.32},
+        "drawing_canvas": {"x": 0.04, "y": 0.05, "w": 0.60, "h": 0.86},
+        "confidence": 0.2,
+        "examples_used": 0,
+        "labeled_total": 0,
+        "method": "aec_default",
+    }
+
+
 def predict_layout(page_id: str) -> dict | None:
     """Few-shot layout prediction from previously taught drawings.
 
     Uses perceptual-hash nearest neighbors and weighted-average boxes.
-    Works from a single taught example.
+    Falls back to an AEC default so the machine always selects first.
     """
     with connect() as conn:
         page = conn.execute("SELECT * FROM pages WHERE id = ?", (page_id,)).fetchone()
@@ -73,7 +88,7 @@ def predict_layout(page_id: str) -> dict | None:
         ).fetchall()
 
     if not examples:
-        return None
+        return default_aec_layout()
 
     target_hash = page["phash"] or ""
     target_aspect = page["width"] / max(page["height"], 1)

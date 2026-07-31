@@ -11,13 +11,14 @@ import { Annotator } from './Annotator'
 
 type Tool = 'information_block' | 'drawing_canvas'
 
-const FIELD_LABELS: Record<string, string> = {
-  company: 'Company',
-  title: 'Title',
-  drawing_number: 'Drawing number',
-  revision: 'Revision',
-  scale: 'Scale',
-  date: 'Date',
+function sameBox(a: Box | null, b: Box | null) {
+  if (!a || !b) return false
+  return (
+    Math.abs(a.x - b.x) < 1e-6 &&
+    Math.abs(a.y - b.y) < 1e-6 &&
+    Math.abs(a.w - b.w) < 1e-6 &&
+    Math.abs(a.h - b.h) < 1e-6
+  )
 }
 
 export function TeachPage() {
@@ -26,6 +27,7 @@ export function TeachPage() {
   const [tool, setTool] = useState<Tool>('information_block')
   const [info, setInfo] = useState<Box | null>(null)
   const [canvas, setCanvas] = useState<Box | null>(null)
+  const [accepted, setAccepted] = useState(false)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -33,33 +35,56 @@ export function TeachPage() {
   useEffect(() => {
     if (!pageId) return
     setError(null)
+    setMessage(null)
     getPage(pageId)
       .then((data) => {
         setPage(data)
-        setInfo(data.annotation?.information_block ?? null)
-        setCanvas(data.annotation?.drawing_canvas ?? null)
+        // Machine goes first: use saved agreement if present, otherwise machine proposal.
+        if (data.annotation) {
+          setInfo(data.annotation.information_block)
+          setCanvas(data.annotation.drawing_canvas)
+          setAccepted(true)
+        } else if (data.suggestion) {
+          setInfo(data.suggestion.information_block)
+          setCanvas(data.suggestion.drawing_canvas)
+          setAccepted(false)
+        } else {
+          setInfo(null)
+          setCanvas(null)
+          setAccepted(false)
+        }
       })
       .catch((err) => setError(err.message))
   }, [pageId])
 
-  const canSave = Boolean(info && canvas)
   const suggestion = page?.suggestion ?? null
+  const canAccept = Boolean(info && canvas)
 
-  const confidenceLabel = useMemo(() => {
-    if (!suggestion) return null
-    return `${Math.round(suggestion.confidence * 100)}% from ${suggestion.examples_used} prior sheet${
-      suggestion.examples_used === 1 ? '' : 's'
-    }`
-  }, [suggestion])
+  const statusLabel = useMemo(() => {
+    if (accepted) return 'Accepted — machine and you agree on this sheet'
+    if (!suggestion) return 'Waiting for machine proposal'
+    if (suggestion.method === 'aec_default') {
+      return 'Machine selected first (AEC default). Correct if needed, then Accept.'
+    }
+    return `Machine selected first · ${Math.round(suggestion.confidence * 100)}% from ${
+      suggestion.examples_used
+    } prior sheet${suggestion.examples_used === 1 ? '' : 's'}`
+  }, [accepted, suggestion])
 
-  async function acceptSuggestion() {
-    if (!suggestion) return
-    setInfo(suggestion.information_block)
-    setCanvas(suggestion.drawing_canvas)
-    setMessage('Accepted machine suggestion. Save to teach it.')
+  function markEdited(nextInfo: Box | null, nextCanvas: Box | null) {
+    setInfo(nextInfo)
+    setCanvas(nextCanvas)
+    if (!page?.annotation) {
+      setAccepted(false)
+      return
+    }
+    const unchanged =
+      sameBox(nextInfo, page.annotation.information_block) &&
+      sameBox(nextCanvas, page.annotation.drawing_canvas)
+    setAccepted(unchanged)
   }
 
-  async function onSave() {
+  async function onAccept() {
     if (!pageId || !info || !canvas) return
     setBusy(true)
     setError(null)
@@ -67,30 +92,35 @@ export function TeachPage() {
       await saveAnnotation(pageId, info, canvas)
       const refreshed = await getPage(pageId)
       setPage(refreshed)
-      setMessage('Saved. JPG segments stored in Info Block and Drawing folders.')
+      setInfo(refreshed.annotation?.information_block ?? info)
+      setCanvas(refreshed.annotation?.drawing_canvas ?? canvas)
+      setAccepted(true)
+      setMessage('Accepted. This agreement is now a learning example, and JPGs were saved to the library.')
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Save failed')
+      setError(err instanceof Error ? err.message : 'Accept failed')
     } finally {
       setBusy(false)
     }
   }
 
   async function onExtract() {
-    if (!pageId) return
-    if (!info || !canvas) {
-      setError('Teach both regions and save before extracting.')
+    if (!pageId || !info || !canvas) {
+      setError('Accept the two regions first.')
       return
     }
     setBusy(true)
     setError(null)
     try {
-      await saveAnnotation(pageId, info, canvas)
+      if (!accepted) {
+        await saveAnnotation(pageId, info, canvas)
+        setAccepted(true)
+      }
       await extractPage(pageId)
       const refreshed = await getPage(pageId)
       setPage(refreshed)
       setInfo(refreshed.annotation?.information_block ?? info)
       setCanvas(refreshed.annotation?.drawing_canvas ?? canvas)
-      setMessage('Information block extracted.')
+      setMessage('Info Block text extracted. Use Segment library for Field1… Excel export.')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Extract failed')
     } finally {
@@ -135,10 +165,10 @@ export function TeachPage() {
           <Link className="btn btn-ghost" to="/library">
             Segments
           </Link>
-          <button className="btn" disabled={!canSave || busy} onClick={() => void onSave()}>
-            Save teaching
+          <button className="btn btn-primary" disabled={!canAccept || busy || accepted} onClick={() => void onAccept()}>
+            {accepted ? 'Accepted' : 'Accept'}
           </button>
-          <button className="btn btn-primary" disabled={!canSave || busy} onClick={() => void onExtract()}>
+          <button className="btn" disabled={!canAccept || busy} onClick={() => void onExtract()}>
             Extract info block
           </button>
         </div>
@@ -146,40 +176,49 @@ export function TeachPage() {
 
       <div className="workspace">
         <aside className="panel">
-          <h2>Teach two regions</h2>
+          <h2>Machine selects first</h2>
           <p className="help">
-            Select a tool, then drag on the drawing. Start with the information block, then mark the
-            drawing canvas.
+            The machine marks Info Block and Drawing. Change a box only if it is wrong. Click{' '}
+            <strong>Accept</strong> when you agree — that finalizes learning for this sheet.
           </p>
+
+          <div className={`status-banner${accepted ? ' ok' : ''}`}>{statusLabel}</div>
+
           <div className="tool-list">
             <button
               className={`tool${tool === 'information_block' ? ' active-info' : ''}`}
               onClick={() => setTool('information_block')}
             >
               <strong>1. Information block</strong>
-              <span>Company, drawing number, revision, scale</span>
+              <span>Correct only if the machine box is wrong</span>
             </button>
             <button
               className={`tool${tool === 'drawing_canvas' ? ' active-canvas' : ''}`}
               onClick={() => setTool('drawing_canvas')}
             >
               <strong>2. Drawing canvas</strong>
-              <span>Main geometry / views area</span>
+              <span>Correct only if the machine box is wrong</span>
             </button>
           </div>
 
-          {suggestion && (
-            <div style={{ marginTop: 8 }}>
-              <p className="help">Machine suggestion ready · {confidenceLabel}</p>
-              <button className="btn" style={{ width: '100%' }} onClick={() => void acceptSuggestion()}>
-                Accept suggestion
-              </button>
-            </div>
-          )}
+          <button
+            className="btn btn-primary"
+            style={{ width: '100%', marginTop: 8 }}
+            disabled={!canAccept || busy || accepted}
+            onClick={() => void onAccept()}
+          >
+            {accepted ? 'Accepted — learning saved' : 'Accept'}
+          </button>
 
-          {!suggestion && (
+          {!accepted && (
             <p className="help" style={{ marginTop: 12 }}>
-              No suggestion yet. Teach the first sheet and the next similar one will get a proposal.
+              Accept = you and the machine agree. SheetSense learns from that agreement and saves JPG
+              segments to the library.
+            </p>
+          )}
+          {accepted && (
+            <p className="help" style={{ marginTop: 12 }}>
+              To change the agreement, redraw a box, then Accept again.
             </p>
           )}
         </aside>
@@ -188,18 +227,17 @@ export function TeachPage() {
           imageUrl={page.image_url}
           informationBlock={info}
           drawingCanvas={canvas}
-          suggestion={suggestion}
+          accepted={accepted}
           activeTool={tool}
           onChange={({ information_block, drawing_canvas }) => {
-            setInfo(information_block)
-            setCanvas(drawing_canvas)
+            markEdited(information_block, drawing_canvas)
             if (information_block && !drawing_canvas) setTool('drawing_canvas')
           }}
         />
 
         <aside className="panel">
-          <h2>Extracted fields</h2>
-          {page.annotation?.segments && (
+          <h2>Agreement result</h2>
+          {page.annotation?.segments ? (
             <div className="field-list" style={{ marginBottom: 14 }}>
               {page.annotation.segments.info_block && (
                 <div className="field">
@@ -214,38 +252,34 @@ export function TeachPage() {
                 </div>
               )}
             </div>
+          ) : (
+            <p className="help">After Accept, JPG crops appear in the Info Block and Drawing folders.</p>
           )}
-          {!page.extraction && (
-            <p className="help">Save both regions, then extract. Vector PDFs use native text when possible.</p>
-          )}
-          {page.extraction && (
+
+          {page.extraction ? (
             <>
-              <div className="field-list">
-                {Object.entries(FIELD_LABELS).map(([key, label]) => (
-                  <div className="field" key={key}>
-                    <label>{label}</label>
-                    <div>{page.extraction?.fields?.[key] || '—'}</div>
-                  </div>
-                ))}
-              </div>
               <div className="raw-text">
-                <div style={{ marginBottom: 6 }}>Method: {page.extraction.method}</div>
+                <div style={{ marginBottom: 6 }}>Extract preview · {page.extraction.method}</div>
                 {page.extraction.raw_text || 'No text found in information block.'}
               </div>
-              {page.extraction.crop_url && (
-                <img
-                  src={page.extraction.crop_url}
-                  alt="Information block crop"
-                  style={{ width: '100%', marginTop: 12, borderRadius: 8, border: '1px solid var(--line)' }}
-                />
-              )}
+              <p className="help" style={{ marginTop: 12 }}>
+                For Field1… Excel export, open Segment library → OCR Info Blocks.
+              </p>
             </>
+          ) : (
+            <p className="help">Optional: Extract info block text after Accept.</p>
           )}
         </aside>
       </div>
 
       {(message || error) && (
-        <div className="toast" onClick={() => { setMessage(null); setError(null) }}>
+        <div
+          className="toast"
+          onClick={() => {
+            setMessage(null)
+            setError(null)
+          }}
+        >
           {error || message}
         </div>
       )}

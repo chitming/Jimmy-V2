@@ -7,10 +7,7 @@ type Props = {
   imageUrl: string
   informationBlock: Box | null
   drawingCanvas: Box | null
-  suggestion?: {
-    information_block: Box
-    drawing_canvas: Box
-  } | null
+  accepted?: boolean
   activeTool: ActiveTool
   onChange: (next: { information_block: Box | null; drawing_canvas: Box | null }) => void
 }
@@ -32,7 +29,7 @@ export function Annotator({
   imageUrl,
   informationBlock,
   drawingCanvas,
-  suggestion,
+  accepted = false,
   activeTool,
   onChange,
 }: Props) {
@@ -82,37 +79,32 @@ export function Annotator({
     }
   }
 
-  const boxes: Array<{ key: string; box: Box; kind: 'info' | 'canvas'; label: string; suggested?: boolean }> = []
-  if (suggestion && !informationBlock) {
-    boxes.push({
-      key: 'sug-info',
-      box: suggestion.information_block,
-      kind: 'info',
-      label: 'Suggested info block',
-      suggested: true,
-    })
-  }
-  if (suggestion && !drawingCanvas) {
-    boxes.push({
-      key: 'sug-canvas',
-      box: suggestion.drawing_canvas,
-      kind: 'canvas',
-      label: 'Suggested canvas',
-      suggested: true,
-    })
-  }
+  const boxes: Array<{ key: string; box: Box; kind: 'info' | 'canvas'; label: string; pending?: boolean }> =
+    []
   if (informationBlock) {
-    boxes.push({ key: 'info', box: informationBlock, kind: 'info', label: 'Information block' })
+    boxes.push({
+      key: 'info',
+      box: informationBlock,
+      kind: 'info',
+      label: accepted ? 'Info block · accepted' : 'Info block · machine',
+      pending: !accepted,
+    })
   }
   if (drawingCanvas) {
-    boxes.push({ key: 'canvas', box: drawingCanvas, kind: 'canvas', label: 'Drawing canvas' })
+    boxes.push({
+      key: 'canvas',
+      box: drawingCanvas,
+      kind: 'canvas',
+      label: accepted ? 'Drawing · accepted' : 'Drawing · machine',
+      pending: !accepted,
+    })
   }
   if (draft) {
     boxes.push({
       key: 'draft',
       box: draft,
       kind: activeTool === 'information_block' ? 'info' : 'canvas',
-      label: 'Drawing…',
+      label: 'Correcting…',
     })
   }
 
@@ -129,7 +121,7 @@ export function Annotator({
           {boxes.map((item) => (
             <div
               key={item.key}
-              className={`box ${item.kind}${item.suggested ? ' suggested' : ''}`}
+              className={`box ${item.kind}${item.pending ? ' pending' : ' accepted-box'}`}
               style={{
                 left: `${item.box.x * 100}%`,
                 top: `${item.box.y * 100}%`,

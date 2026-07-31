@@ -66,10 +66,10 @@ Drawing understanding (Stream B) is not started yet.
 
 No cloud vision account required for the first version.
 
-- Each taught page stores normalized boxes + a perceptual image hash
-- New pages get a **few-shot suggestion** from the nearest previously taught sheets
-- You accept or correct the boxes → the memory improves
-- Corrected boxes overwrite the JPG segments in the library folders
+1. Machine selects Info Block + Drawing first (from prior accepts, or AEC default)
+2. User corrects only if wrong
+3. **Accept** = final agreement → save learning example + library JPGs
+4. Next sheet uses that agreement to propose better boxes
 
 ## Project layout
 
