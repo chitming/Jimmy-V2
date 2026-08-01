@@ -9,8 +9,6 @@ numpy==2.2.5
 aiofiles==24.1.0
 pydantic==2.11.4
 openpyxl==3.1.5
-paddlepaddle==3.1.0
-paddleocr==3.7.0
 opencv-python-headless==4.11.0.86
 ezdxf==1.4.2
 shapely==2.1.1

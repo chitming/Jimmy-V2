@@ -440,7 +440,6 @@ def run_drawing_pipeline(image_path: Path, work_dir: Path) -> dict:
     Stack:
       OpenCV   → lines, circles, contours
       Shapely  → join and clean geometry
-      PaddleOCR→ labels and dimensions
       YOLO     → valves, equipment and symbols
       ezdxf    → DXF export
     """
@@ -451,9 +450,7 @@ def run_drawing_pipeline(image_path: Path, work_dir: Path) -> dict:
 
     deskewed_gray, cleaned_gray, cleaned_bin, clean_meta = cleanup_and_deskew(image_bgr)
     cleaned_path = work_dir / "cleaned.png"
-    ocr_input_path = work_dir / "ocr_input.png"
     cv2.imwrite(str(cleaned_path), cleaned_gray)
-    cv2.imwrite(str(ocr_input_path), deskewed_gray)
 
     # OpenCV detections
     raw_lines = detect_lines(cleaned_bin)
@@ -463,12 +460,6 @@ def run_drawing_pipeline(image_path: Path, work_dir: Path) -> dict:
     # Shapely geometry cleanup
     lines = join_and_clean_lines(raw_lines)
     circles = clean_circles(raw_circles)
-
-    # PaddleOCR annotations (labels / dimensions)
-    from .drawing_ocr import run_ppocrv6_on_image
-
-    ocr = run_ppocrv6_on_image(ocr_input_path)
-    ocr_items = ocr["items"]
 
     # YOLO symbol recognition on deskewed color image
     deskewed_bgr = cv2.cvtColor(deskewed_gray, cv2.COLOR_GRAY2BGR)
@@ -484,10 +475,10 @@ def run_drawing_pipeline(image_path: Path, work_dir: Path) -> dict:
         circles=circles,
         arcs=arcs,
         symbols=symbols,
-        ocr_items=ocr_items,
+        ocr_items=[],
     )
 
-    preview = render_preview(cleaned_gray, lines, circles, arcs, symbols, ocr_items)
+    preview = render_preview(cleaned_gray, lines, circles, arcs, symbols, [])
     preview_path = work_dir / "preview.png"
     cv2.imwrite(str(preview_path), preview)
 
@@ -521,12 +512,6 @@ def run_drawing_pipeline(image_path: Path, work_dir: Path) -> dict:
             },
         },
         {
-            "id": "paddleocr",
-            "label": "PaddleOCR — extract labels and dimensions",
-            "ok": True,
-            "detail": {"count": len(ocr_items), "engine": "PP-OCRv6"},
-        },
-        {
             "id": "yolo",
             "label": "YOLO — recognise valves, equipment and symbols",
             "ok": True,
@@ -541,11 +526,11 @@ def run_drawing_pipeline(image_path: Path, work_dir: Path) -> dict:
     ]
 
     return {
-        "engine": "OpenCV + Shapely + PP-OCRv6 + YOLO + ezdxf",
+        "engine": "OpenCV + Shapely + YOLO + ezdxf",
         "image_width": clean_meta["width"],
         "image_height": clean_meta["height"],
         "cleanup": clean_meta,
-        "items": ocr_items,
+        "items": [],
         "vectors": vectors,
         "stages": stages,
         "cleaned_path": str(cleaned_path),
@@ -556,12 +541,10 @@ def run_drawing_pipeline(image_path: Path, work_dir: Path) -> dict:
             "circles": len(circles),
             "arcs": len(arcs),
             "symbols": len(symbols),
-            "texts": len(ocr_items),
             "raw_lines": len(raw_lines),
         },
         "stack": {
             "OpenCV": "Detect lines, circles and contours",
-            "PaddleOCR": "Extract labels and dimensions",
             "ezdxf": "Generate the DXF file",
             "Shapely": "Join and clean geometry",
             "YOLO": "Recognise valves, equipment and symbols",

@@ -27,7 +27,6 @@ from .services.drawing_ocr import (
     get_drawing_ocr_run,
     list_drawing_ocr_runs,
     ocr_drawing_segments,
-    update_drawing_ocr_items,
 )
 from .services.info_block_excel import (
     build_info_block_excel,
@@ -95,11 +94,6 @@ def stats() -> dict:
     }
 
 
-class DrawingOcrUpdatePayload(BaseModel):
-    items: list[dict]
-    status: str = "reviewed"
-
-
 @app.get("/api/library")
 def get_library(kind: str | None = None) -> dict:
     if kind is not None and kind not in {"info_block", "drawing"}:
@@ -154,7 +148,11 @@ def export_info_blocks_excel():
 @app.get("/api/drawings-ocr")
 def get_drawing_ocr_list() -> dict:
     runs = list_drawing_ocr_runs()
-    return {"engine": "PP-OCRv6", "count": len(runs), "runs": runs}
+    return {
+        "engine": "OpenCV + Shapely + YOLO + ezdxf",
+        "count": len(runs),
+        "runs": runs,
+    }
 
 
 @app.post("/api/drawings-ocr/run")
@@ -171,7 +169,7 @@ def run_drawing_ocr(page_id: str | None = None) -> dict:
 def get_drawing_ocr(page_id: str) -> dict:
     run = get_drawing_ocr_run(page_id)
     if run is None:
-        raise HTTPException(404, "No Drawing OCR result for this page. Run PP-OCRv6 first.")
+        raise HTTPException(404, "No Drawing pipeline result for this page. Run the pipeline first.")
     return run
 
 
@@ -185,16 +183,6 @@ def export_drawing_dxf(page_id: str):
         media_type="application/dxf",
         filename=f"{page_id}.dxf",
     )
-
-
-@app.put("/api/drawings-ocr/{page_id}")
-def put_drawing_ocr(page_id: str, payload: DrawingOcrUpdatePayload) -> dict:
-    try:
-        return update_drawing_ocr_items(page_id, payload.items, payload.status)
-    except KeyError:
-        raise HTTPException(404, "No Drawing OCR result for this page") from None
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
 
 
 @app.post("/api/drawings/upload")

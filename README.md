@@ -68,13 +68,11 @@ Tool stack:
 |---|---|
 | OpenCV | Detect lines, circles and contours |
 | Shapely | Join and clean geometry |
-| PaddleOCR | Extract labels and dimensions |
 | YOLO | Recognise valves, equipment and symbols |
 | ezdxf | Generate the DXF file |
 
 1. Click **Run Drawing pipeline**
-2. Open the **review canvas** to check OCR / symbols
-3. Download the `.dxf`
+2. Download the `.dxf` (vector preview is also generated)
 
 Optional: place a fine-tuned weights file at `backend/data/models/aec_symbols.pt` to replace YOLO-World open-vocab detection.
 

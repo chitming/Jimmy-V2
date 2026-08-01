@@ -207,15 +207,6 @@ export function downloadInfoBlockExcel() {
   })
 }
 
-export type DrawingOcrItem = {
-  id: string
-  text: string
-  score: number
-  box: Box
-  pixel_box: number[]
-  edited?: boolean
-}
-
 export type DrawingOcrRun = {
   id: string
   segment_id: string
@@ -226,7 +217,7 @@ export type DrawingOcrRun = {
   image_width: number
   image_height: number
   engine: string
-  items: DrawingOcrItem[]
+  items: []
   item_count: number
   status: string
   created_at: string
@@ -235,7 +226,6 @@ export type DrawingOcrRun = {
   preview_url?: string | null
   cleaned_url?: string | null
   dxf_url?: string | null
-  review_url: string
   vectors?: {
     lines: Array<Record<string, number | string>>
     circles: Array<Record<string, number | string>>
@@ -248,7 +238,6 @@ export type DrawingOcrRun = {
     circles?: number
     arcs?: number
     symbols?: number
-    texts?: number
   }
 }
 
@@ -263,21 +252,15 @@ export function runDrawingOcr(pageId?: string) {
     pipeline?: string[]
     processed: number
     errors: Array<{ segment_id: string; error: string }>
-    runs: Array<{ id: string; page_id: string; item_count: number; review_url: string; dxf_url?: string }>
+    runs: Array<{
+      id: string
+      page_id: string
+      item_count: number
+      dxf_url?: string
+      preview_url?: string
+    }>
     all_runs: DrawingOcrRun[]
   }>(`/api/drawings-ocr/run${query}`, { method: 'POST' })
-}
-
-export function getDrawingOcr(pageId: string) {
-  return request<DrawingOcrRun>(`/api/drawings-ocr/${pageId}`)
-}
-
-export function saveDrawingOcrReview(pageId: string, items: DrawingOcrItem[], status = 'reviewed') {
-  return request<DrawingOcrRun>(`/api/drawings-ocr/${pageId}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ items, status }),
-  })
 }
 
 export function downloadDrawingDxf(pageId: string) {

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import {
+  downloadDrawingDxf,
   downloadInfoBlockExcel,
   getInfoBlockRows,
   getLibrary,
@@ -15,7 +16,6 @@ import {
 type Filter = 'all' | 'info_block' | 'drawing'
 
 export function LibraryPage() {
-  const navigate = useNavigate()
   const [items, setItems] = useState<LibraryItem[]>([])
   const [counts, setCounts] = useState({ info_block: 0, drawing: 0 })
   const [filter, setFilter] = useState<Filter>('all')
@@ -89,14 +89,24 @@ export function LibraryPage() {
       const result = await runDrawingOcr()
       setDrawingRuns(result.all_runs)
       setMessage(
-        `Drawing pipeline complete: ${result.processed} segment${result.processed === 1 ? '' : 's'}. Open review canvas / download DXF.`,
+        `Drawing pipeline complete: ${result.processed} segment${result.processed === 1 ? '' : 's'}. Download DXF when ready.`,
       )
       await refresh()
-      if (result.runs[0]) {
-        navigate(result.runs[0].review_url)
-      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Drawing OCR failed')
+      setError(err instanceof Error ? err.message : 'Drawing pipeline failed')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function onDownloadDxf(pageId: string) {
+    setBusy(true)
+    setError(null)
+    try {
+      await downloadDrawingDxf(pageId)
+      setMessage(`DXF downloaded: ${pageId}.dxf`)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'DXF download failed')
     } finally {
       setBusy(false)
     }
@@ -138,8 +148,7 @@ export function LibraryPage() {
         <h2>Stream B · Drawing pipeline → DXF</h2>
         <p className="help">
           <code>OpenCV</code> lines/circles/contours → <code>Shapely</code> clean geometry →{' '}
-          <code>PaddleOCR</code> labels/dimensions → <code>YOLO</code> valves/equipment/symbols →{' '}
-          <code>ezdxf</code> DXF export.
+          <code>YOLO</code> valves/equipment/symbols → <code>ezdxf</code> DXF export.
         </p>
         <div className="nav-actions" style={{ marginTop: 14 }}>
           <button
@@ -155,13 +164,26 @@ export function LibraryPage() {
             {drawingRuns.map((run) => (
               <div className="field" key={run.id}>
                 <label>
-                  {run.source_filename} · page {run.page_index + 1} · text {run.item_count}
+                  {run.source_filename} · page {run.page_index + 1}
                   {run.counts ? ` · lines ${run.counts.lines ?? 0}` : ''}
-                  {run.status === 'reviewed' ? ' · reviewed' : ' · pending review'}
+                  {run.counts ? ` · circles ${run.counts.circles ?? 0}` : ''}
+                  {run.counts ? ` · symbols ${run.counts.symbols ?? 0}` : ''}
                 </label>
-                <div>
-                  <Link to={run.review_url}>Open review canvas</Link>
-                  {run.dxf_url ? ' · DXF ready' : ''}
+                <div className="nav-actions">
+                  {run.preview_url ? (
+                    <a href={run.preview_url} target="_blank" rel="noreferrer">
+                      Preview
+                    </a>
+                  ) : null}
+                  {run.dxf_url ? (
+                    <button
+                      className="btn"
+                      disabled={busy}
+                      onClick={() => void onDownloadDxf(run.page_id)}
+                    >
+                      Download DXF
+                    </button>
+                  ) : null}
                 </div>
               </div>
             ))}
@@ -258,10 +280,14 @@ export function LibraryPage() {
                   <Link className="pill" to={`/teach/${item.page_id}`}>
                     Open sheet
                   </Link>
-                  {item.kind === 'drawing' && drawingRun && (
-                    <Link className="pill" to={drawingRun.review_url}>
-                      Review OCR
-                    </Link>
+                  {item.kind === 'drawing' && drawingRun?.dxf_url && (
+                    <button
+                      className="pill"
+                      disabled={busy}
+                      onClick={() => void onDownloadDxf(item.page_id)}
+                    >
+                      Download DXF
+                    </button>
                   )}
                 </div>
               </div>
