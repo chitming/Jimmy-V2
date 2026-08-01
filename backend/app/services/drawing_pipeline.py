@@ -105,19 +105,25 @@ def detect_lines(binary_inv: np.ndarray) -> list[dict]:
 
 
 def detect_circles_and_arcs(binary_inv: np.ndarray) -> tuple[list[dict], list[dict]]:
-    """Detect circles (Hough) and arc-like contours."""
+    """Detect circles (Hough) and arc-like contours.
+
+    HoughCircles often returns many near-duplicates for one real circle.
+    We use a larger minDist and validate rim support against ink pixels.
+    """
     h, w = binary_inv.shape[:2]
     blur = cv2.GaussianBlur(binary_inv, (5, 5), 0)
-    min_r = max(6, int(min(h, w) * 0.01))
-    max_r = max(min_r + 1, int(min(h, w) * 0.25))
+    min_r = max(8, int(min(h, w) * 0.015))
+    max_r = max(min_r + 1, int(min(h, w) * 0.35))
+    # Must be large enough so one circle does not spawn many nearby votes.
+    min_dist = max(int(min_r * 1.8), int(min(h, w) * 0.05))
 
     circles_cv = cv2.HoughCircles(
         blur,
         cv2.HOUGH_GRADIENT,
         dp=1.2,
-        minDist=max(20, min_r * 2),
-        param1=80,
-        param2=28,
+        minDist=min_dist,
+        param1=100,
+        param2=40,
         minRadius=min_r,
         maxRadius=max_r,
     )
@@ -125,6 +131,9 @@ def detect_circles_and_arcs(binary_inv: np.ndarray) -> tuple[list[dict], list[di
     circles: list[dict] = []
     if circles_cv is not None:
         for index, (cx, cy, r) in enumerate(np.round(circles_cv[0]).astype(int)):
+            support = _circle_edge_support(binary_inv, float(cx), float(cy), float(r))
+            if support < 0.45:
+                continue
             circles.append(
                 {
                     "id": f"circle_{index + 1}",
@@ -132,6 +141,7 @@ def detect_circles_and_arcs(binary_inv: np.ndarray) -> tuple[list[dict], list[di
                     "cx": float(cx),
                     "cy": float(cy),
                     "r": float(r),
+                    "support": support,
                 }
             )
 
@@ -175,6 +185,27 @@ def detect_circles_and_arcs(binary_inv: np.ndarray) -> tuple[list[dict], list[di
                 break
 
     return circles, arcs
+
+
+def _circle_edge_support(binary_inv: np.ndarray, cx: float, cy: float, r: float, samples: int = 72) -> float:
+    """Fraction of sampled rim points that land on ink (binary_inv > 0)."""
+    h, w = binary_inv.shape[:2]
+    if r <= 1:
+        return 0.0
+    hits = 0
+    total = 0
+    for i in range(samples):
+        ang = 2.0 * np.pi * i / samples
+        # Probe a thin band around the rim.
+        for scale in (0.96, 1.0, 1.04):
+            x = int(round(cx + np.cos(ang) * r * scale))
+            y = int(round(cy + np.sin(ang) * r * scale))
+            if 0 <= x < w and 0 <= y < h:
+                total += 1
+                if binary_inv[y, x] > 0:
+                    hits += 1
+                    break
+    return hits / float(total or 1)
 
 
 def detect_symbol_candidates(binary_inv: np.ndarray) -> list[dict]:

@@ -128,19 +128,33 @@ def join_and_clean_lines(
 
 
 def clean_circles(circles: Iterable[dict], *, min_r: float = 4.0, dedupe_tol: float = 6.0) -> list[dict]:
-    """Drop tiny/duplicate circles."""
+    """Drop tiny/duplicate circles.
+
+    HoughCircles often emits many near-duplicates for one real circle
+    (centers a few dozen pixels apart, radii slightly different). Merge those
+    by relative center distance and radius similarity, keeping the strongest.
+    """
+    ranked = sorted(
+        (c for c in circles if float(c.get("r", 0)) >= min_r),
+        key=lambda c: (float(c.get("support", 0.0)), float(c.get("r", 0.0))),
+        reverse=True,
+    )
     kept: list[dict] = []
-    for index, circle in enumerate(circles):
-        r = float(circle.get("r", 0))
-        if r < min_r:
-            continue
+    for circle in ranked:
+        r = float(circle["r"])
         cx, cy = float(circle["cx"]), float(circle["cy"])
         duplicate = False
         for prev in kept:
-            if abs(cx - float(prev["cx"])) <= dedupe_tol and abs(cy - float(prev["cy"])) <= dedupe_tol:
-                if abs(r - float(prev["r"])) <= dedupe_tol:
-                    duplicate = True
-                    break
+            pr = float(prev["r"])
+            dist = ((cx - float(prev["cx"])) ** 2 + (cy - float(prev["cy"])) ** 2) ** 0.5
+            # Same circle if centers are close relative to size and radii match.
+            if dist <= max(dedupe_tol, 0.35 * max(r, pr)) and abs(r - pr) <= 0.30 * max(r, pr):
+                duplicate = True
+                break
+            # Also merge concentric-ish rings with similar radius.
+            if dist <= max(dedupe_tol, 0.15 * max(r, pr)) and abs(r - pr) <= 0.20 * max(r, pr):
+                duplicate = True
+                break
         if duplicate:
             continue
         kept.append(
@@ -150,6 +164,7 @@ def clean_circles(circles: Iterable[dict], *, min_r: float = 4.0, dedupe_tol: fl
                 "cx": cx,
                 "cy": cy,
                 "r": r,
+                "support": float(circle.get("support", 0.0)),
             }
         )
     return kept
