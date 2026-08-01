@@ -62,15 +62,21 @@ On the Segment library page:
 
 ## Stream B — Drawing pipeline → DXF
 
+Tool stack:
+
+| Tool | Role |
+|---|---|
+| OpenCV | Detect lines, circles and contours |
+| Shapely | Join and clean geometry |
+| PaddleOCR | Extract labels and dimensions |
+| YOLO | Recognise valves, equipment and symbols |
+| ezdxf | Generate the DXF file |
+
 1. Click **Run Drawing pipeline**
-2. Steps:
-   - Image cleanup and deskew
-   - Raster-to-vector line detection
-   - PaddleOCR PP-OCRv6 for annotations
-   - Circle, arc and symbol detection
-   - Export to DXF
-3. Open the **review canvas** to check OCR text
-4. Download the `.dxf` file
+2. Open the **review canvas** to check OCR / symbols
+3. Download the `.dxf`
+
+Optional: place a fine-tuned weights file at `backend/data/models/aec_symbols.pt` to replace YOLO-World open-vocab detection.
 
 ## How learning works (v1)
 

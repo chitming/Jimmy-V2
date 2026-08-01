@@ -292,14 +292,13 @@ def ocr_drawing_segments(page_id: str | None = None) -> dict:
         )
 
     return {
-        "engine": "PP-OCRv6 + OpenCV vector pipeline",
+        "engine": "OpenCV + Shapely + PP-OCRv6 + YOLO + ezdxf",
         "pipeline": [
-            "Drawing image",
-            "Image cleanup and deskew",
-            "Raster-to-vector line detection",
-            "PaddleOCR for annotations",
-            "Circle, arc and symbol detection",
-            "Export to DXF",
+            "OpenCV — detect lines, circles and contours",
+            "Shapely — join and clean geometry",
+            "PaddleOCR — extract labels and dimensions",
+            "YOLO — recognise valves, equipment and symbols",
+            "ezdxf — generate the DXF file",
         ],
         "processed": len(processed),
         "errors": errors,

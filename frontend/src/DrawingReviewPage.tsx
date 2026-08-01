@@ -147,7 +147,7 @@ export function DrawingReviewPage() {
         <aside className="panel">
           <h2>Pipeline</h2>
           <p className="help">
-            Drawing image → cleanup/deskew → vector lines → PP-OCRv6 → circles/arcs/symbols → DXF
+            OpenCV → Shapely → PaddleOCR → YOLO → ezdxf
           </p>
           <div className="field-list" style={{ marginBottom: 12 }}>
             {(run.stages || []).map((stage) => (
@@ -247,8 +247,8 @@ export function DrawingReviewPage() {
             </>
           )}
           <p className="help" style={{ marginTop: 16 }}>
-            Symbols are heuristic candidates for now (closed shapes). Full AEC symbol training can
-            come next.
+            YOLO uses open-vocabulary classes (valve, pump, equipment…). For better AEC accuracy,
+            add fine-tuned weights at <code>backend/data/models/aec_symbols.pt</code>.
           </p>
         </aside>
       </div>

@@ -6,6 +6,9 @@ import cv2
 import ezdxf
 import numpy as np
 
+from .geometry_clean import clean_circles, join_and_clean_lines
+from .yolo_symbols import recognise_symbols
+
 def cleanup_and_deskew(image_bgr: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray, dict]:
     """Grayscale cleanup + deskew for AEC drawing rasters.
 
@@ -79,7 +82,11 @@ def detect_lines(binary_inv: np.ndarray) -> list[dict]:
 
     min_len = max(12.0, min(binary_inv.shape[:2]) * 0.01)
     for index, line in enumerate(lines):
-        x1, y1, x2, y2 = [float(v) for v in line[0]]
+        arr = line[0] if getattr(line, "ndim", 1) > 1 else line
+        vals = [float(v) for v in np.asarray(arr).reshape(-1)[:4]]
+        if len(vals) < 4:
+            continue
+        x1, y1, x2, y2 = vals
         length = float(np.hypot(x2 - x1, y2 - y1))
         if length < min_len:
             continue
@@ -171,7 +178,7 @@ def detect_circles_and_arcs(binary_inv: np.ndarray) -> tuple[list[dict], list[di
 
 
 def detect_symbol_candidates(binary_inv: np.ndarray) -> list[dict]:
-    """Heuristic symbol candidates from compact closed contours (AEC markers, etc.)."""
+    """Fallback contour candidates when YOLO finds nothing."""
     h, w = binary_inv.shape[:2]
     contours, _ = cv2.findContours(binary_inv, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     symbols: list[dict] = []
@@ -199,14 +206,17 @@ def detect_symbol_candidates(binary_inv: np.ndarray) -> list[dict]:
 
         symbols.append(
             {
-                "id": f"symbol_{index + 1}",
+                "id": f"contour_{index + 1}",
                 "type": "symbol_candidate",
+                "label": f"candidate:{shape}",
+                "score": 0.0,
                 "shape": shape,
                 "x": float(x),
                 "y": float(y),
                 "w": float(bw),
                 "h": float(bh),
                 "area": area,
+                "source": "contour",
             }
         )
         if len(symbols) >= 120:
@@ -233,6 +243,7 @@ def export_dxf(
     doc.layers.add("ARCS", color=4)
     doc.layers.add("SYMBOLS", color=1)
     doc.layers.add("TEXT", color=2)
+    doc.layers.add("YOLO", color=6)
 
     def flip_y(y: float) -> float:
         return float(height - y)
@@ -266,6 +277,7 @@ def export_dxf(
 
     for symbol in symbols:
         x, y, bw, bh = symbol["x"], symbol["y"], symbol["w"], symbol["h"]
+        layer = "YOLO" if symbol.get("source") == "yolo" else "SYMBOLS"
         points = [
             (x, flip_y(y)),
             (x + bw, flip_y(y)),
@@ -273,7 +285,16 @@ def export_dxf(
             (x, flip_y(y + bh)),
             (x, flip_y(y)),
         ]
-        msp.add_lwpolyline(points, dxfattribs={"layer": "SYMBOLS"})
+        msp.add_lwpolyline(points, dxfattribs={"layer": layer})
+        label = str(symbol.get("label") or symbol.get("shape") or "symbol")
+        msp.add_text(
+            label,
+            dxfattribs={
+                "layer": layer,
+                "height": max(8.0, bh * 0.35),
+                "insert": (x, flip_y(y) + 2.0),
+            },
+        )
 
     for item in ocr_items:
         box = item.get("box") or {}
@@ -347,7 +368,19 @@ def render_preview(
         )
     for symbol in symbols:
         x, y, bw, bh = int(symbol["x"]), int(symbol["y"]), int(symbol["w"]), int(symbol["h"])
-        cv2.rectangle(preview, (x, y), (x + bw, y + bh), (90, 90, 255), 1)
+        color = (90, 90, 255) if symbol.get("source") != "yolo" else (255, 120, 40)
+        cv2.rectangle(preview, (x, y), (x + bw, y + bh), color, 2)
+        label = str(symbol.get("label") or "symbol")
+        cv2.putText(
+            preview,
+            label[:28],
+            (x, max(14, y - 4)),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.45,
+            color,
+            1,
+            cv2.LINE_AA,
+        )
 
     for item in ocr_items:
         box = item.get("box") or {}
@@ -373,12 +406,12 @@ def render_preview(
 
 def run_drawing_pipeline(image_path: Path, work_dir: Path) -> dict:
     """
-    Drawing image
-      → cleanup + deskew
-      → raster-to-vector lines
-      → PP-OCRv6 annotations
-      → circle / arc / symbol detection
-      → DXF export
+    Stack:
+      OpenCV   → lines, circles, contours
+      Shapely  → join and clean geometry
+      PaddleOCR→ labels and dimensions
+      YOLO     → valves, equipment and symbols
+      ezdxf    → DXF export
     """
     work_dir.mkdir(parents=True, exist_ok=True)
     image_bgr = cv2.imread(str(image_path), cv2.IMREAD_COLOR)
@@ -391,15 +424,25 @@ def run_drawing_pipeline(image_path: Path, work_dir: Path) -> dict:
     cv2.imwrite(str(cleaned_path), cleaned_gray)
     cv2.imwrite(str(ocr_input_path), deskewed_gray)
 
-    lines = detect_lines(cleaned_bin)
-    circles, arcs = detect_circles_and_arcs(cleaned_bin)
-    symbols = detect_symbol_candidates(cleaned_bin)
+    # OpenCV detections
+    raw_lines = detect_lines(cleaned_bin)
+    raw_circles, arcs = detect_circles_and_arcs(cleaned_bin)
+    contour_symbols = detect_symbol_candidates(cleaned_bin)
 
-    # OCR on deskewed grayscale (keeps annotation readability better than hard binary).
+    # Shapely geometry cleanup
+    lines = join_and_clean_lines(raw_lines)
+    circles = clean_circles(raw_circles)
+
+    # PaddleOCR annotations (labels / dimensions)
     from .drawing_ocr import run_ppocrv6_on_image
 
     ocr = run_ppocrv6_on_image(ocr_input_path)
     ocr_items = ocr["items"]
+
+    # YOLO symbol recognition on deskewed color image
+    deskewed_bgr = cv2.cvtColor(deskewed_gray, cv2.COLOR_GRAY2BGR)
+    yolo_symbols, yolo_meta = recognise_symbols(deskewed_bgr)
+    symbols = yolo_symbols if yolo_symbols else contour_symbols
 
     dxf_path = work_dir / "export.dxf"
     export_dxf(
@@ -424,39 +467,50 @@ def run_drawing_pipeline(image_path: Path, work_dir: Path) -> dict:
         "symbols": symbols,
     }
     stages = [
-        {"id": "cleanup_deskew", "label": "Image cleanup and deskew", "ok": True, "detail": clean_meta},
         {
-            "id": "line_vectorization",
-            "label": "Raster-to-vector line detection",
-            "ok": True,
-            "detail": {"count": len(lines)},
-        },
-        {
-            "id": "paddleocr_annotations",
-            "label": "PaddleOCR PP-OCRv6 for annotations",
-            "ok": True,
-            "detail": {"count": len(ocr_items)},
-        },
-        {
-            "id": "circle_arc_symbol",
-            "label": "Circle, arc and symbol detection",
+            "id": "opencv",
+            "label": "OpenCV — detect lines, circles and contours",
             "ok": True,
             "detail": {
-                "circles": len(circles),
+                "raw_lines": len(raw_lines),
+                "circles": len(raw_circles),
                 "arcs": len(arcs),
-                "symbols": len(symbols),
+                "contours": len(contour_symbols),
+                "deskew": clean_meta,
             },
         },
         {
-            "id": "dxf_export",
-            "label": "Export to DXF",
+            "id": "shapely",
+            "label": "Shapely — join and clean geometry",
+            "ok": True,
+            "detail": {
+                "lines_in": len(raw_lines),
+                "lines_out": len(lines),
+                "circles_out": len(circles),
+            },
+        },
+        {
+            "id": "paddleocr",
+            "label": "PaddleOCR — extract labels and dimensions",
+            "ok": True,
+            "detail": {"count": len(ocr_items), "engine": "PP-OCRv6"},
+        },
+        {
+            "id": "yolo",
+            "label": "YOLO — recognise valves, equipment and symbols",
+            "ok": True,
+            "detail": yolo_meta,
+        },
+        {
+            "id": "ezdxf",
+            "label": "ezdxf — generate the DXF file",
             "ok": dxf_path.exists(),
             "detail": {"path": str(dxf_path)},
         },
     ]
 
     return {
-        "engine": "PP-OCRv6 + OpenCV vector pipeline",
+        "engine": "OpenCV + Shapely + PP-OCRv6 + YOLO + ezdxf",
         "image_width": clean_meta["width"],
         "image_height": clean_meta["height"],
         "cleanup": clean_meta,
@@ -472,5 +526,13 @@ def run_drawing_pipeline(image_path: Path, work_dir: Path) -> dict:
             "arcs": len(arcs),
             "symbols": len(symbols),
             "texts": len(ocr_items),
+            "raw_lines": len(raw_lines),
+        },
+        "stack": {
+            "OpenCV": "Detect lines, circles and contours",
+            "PaddleOCR": "Extract labels and dimensions",
+            "ezdxf": "Generate the DXF file",
+            "Shapely": "Join and clean geometry",
+            "YOLO": "Recognise valves, equipment and symbols",
         },
     }

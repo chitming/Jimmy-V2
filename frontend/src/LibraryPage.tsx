@@ -137,8 +137,9 @@ export function LibraryPage() {
       <section className="panel" style={{ marginBottom: 22 }}>
         <h2>Stream B · Drawing pipeline → DXF</h2>
         <p className="help">
-          Drawing image → cleanup/deskew → vector lines → <code>PP-OCRv6</code> annotations →
-          circles/arcs/symbols → export DXF. Then open the review canvas to check results.
+          <code>OpenCV</code> lines/circles/contours → <code>Shapely</code> clean geometry →{' '}
+          <code>PaddleOCR</code> labels/dimensions → <code>YOLO</code> valves/equipment/symbols →{' '}
+          <code>ezdxf</code> DXF export.
         </p>
         <div className="nav-actions" style={{ marginTop: 14 }}>
           <button

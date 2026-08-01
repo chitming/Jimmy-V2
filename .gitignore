@@ -5,6 +5,7 @@ backend/data/pages/
 backend/data/crops/
 backend/data/library/
 backend/data/pipeline/
+backend/data/models/*.pt
 backend/data/*.db
 frontend/node_modules/
 frontend/dist/
