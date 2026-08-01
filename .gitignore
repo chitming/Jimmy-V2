@@ -14,3 +14,5 @@ __pycache__/
 .DS_Store
 .env
 .env.*
+
+tools/**/node_modules/
