@@ -7,7 +7,9 @@ from typing import Any
 
 from PIL import Image
 
-from ..db import LIBRARY_DIR, connect, dumps, loads, new_id, utc_now
+from ..db import LIBRARY_DIR, PIPELINE_DIR, connect, dumps, loads, new_id, utc_now
+from .drawing_pipeline import run_drawing_pipeline
+
 
 # Avoid a slow hoster connectivity probe on every process start.
 os.environ.setdefault("PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK", "True")
@@ -106,10 +108,15 @@ def run_ppocrv6_on_image(image_path: Path) -> dict:
 
 
 def _run_payload(row) -> dict:
+    page_id = row["page_id"]
+    preview_name = f"{page_id}/preview.png"
+    cleaned_name = f"{page_id}/cleaned.png"
+    has_preview = bool(row["preview_path"]) and Path(row["preview_path"]).exists() if row["preview_path"] else False
+    has_dxf = bool(row["dxf_path"]) and Path(row["dxf_path"]).exists() if row["dxf_path"] else False
     return {
         "id": row["id"],
         "segment_id": row["segment_id"],
-        "page_id": row["page_id"],
+        "page_id": page_id,
         "source_filename": row["source_filename"],
         "segment_filename": row["segment_filename"],
         "page_index": row["page_index"],
@@ -121,8 +128,14 @@ def _run_payload(row) -> dict:
         "status": row["status"],
         "created_at": row["created_at"],
         "updated_at": row["updated_at"],
+        "vectors": loads(row["vectors_json"]) if row["vectors_json"] else {"lines": [], "circles": [], "arcs": [], "symbols": []},
+        "stages": loads(row["stages_json"]) if row["stages_json"] else [],
+        "counts": loads(row["counts_json"]) if row["counts_json"] else {},
         "image_url": f"/media/library/Drawing/{row['segment_filename']}",
-        "review_url": f"/drawing-review/{row['page_id']}",
+        "preview_url": f"/media/pipeline/{preview_name}" if has_preview else None,
+        "cleaned_url": f"/media/pipeline/{cleaned_name}" if row["cleaned_path"] else None,
+        "dxf_url": f"/api/drawings-ocr/{page_id}/export.dxf" if has_dxf else None,
+        "review_url": f"/drawing-review/{page_id}",
     }
 
 
@@ -143,7 +156,20 @@ def get_drawing_ocr_run(page_id: str) -> dict | None:
     return _run_payload(row) if row else None
 
 
+def get_drawing_dxf_path(page_id: str) -> Path | None:
+    with connect() as conn:
+        row = conn.execute(
+            "SELECT dxf_path FROM drawing_ocr_runs WHERE page_id = ?",
+            (page_id,),
+        ).fetchone()
+    if row is None or not row["dxf_path"]:
+        return None
+    path = Path(row["dxf_path"])
+    return path if path.exists() else None
+
+
 def ocr_drawing_segments(page_id: str | None = None) -> dict:
+    """Run full Stream B pipeline on Drawing library segments."""
     query = """
         SELECT s.*, p.page_index, d.filename AS source_filename
         FROM segments s
@@ -174,8 +200,9 @@ def ocr_drawing_segments(page_id: str | None = None) -> dict:
                 }
             )
             continue
+        work_dir = PIPELINE_DIR / seg["page_id"]
         try:
-            result = run_ppocrv6_on_image(image_path)
+            result = run_drawing_pipeline(image_path, work_dir)
         except Exception as exc:  # noqa: BLE001
             errors.append({"segment_id": seg["id"], "error": str(exc)})
             continue
@@ -185,6 +212,24 @@ def ocr_drawing_segments(page_id: str | None = None) -> dict:
                 "SELECT id FROM drawing_ocr_runs WHERE segment_id = ?",
                 (seg["id"],),
             ).fetchone()
+            values = (
+                seg["source_filename"],
+                seg["filename"],
+                seg["page_index"],
+                result["image_width"],
+                result["image_height"],
+                result["engine"],
+                dumps(result["items"]),
+                len(result["items"]),
+                dumps(result["vectors"]),
+                dumps(result["stages"]),
+                dumps(result["counts"]),
+                result["cleaned_path"],
+                result["preview_path"],
+                result["dxf_path"],
+                now,
+                seg["id"],
+            )
             if existing:
                 conn.execute(
                     """
@@ -192,21 +237,12 @@ def ocr_drawing_segments(page_id: str | None = None) -> dict:
                     SET source_filename = ?, segment_filename = ?, page_index = ?,
                         image_width = ?, image_height = ?, engine = ?,
                         items_json = ?, item_count = ?, status = 'pending_review',
+                        vectors_json = ?, stages_json = ?, counts_json = ?,
+                        cleaned_path = ?, preview_path = ?, dxf_path = ?,
                         updated_at = ?
                     WHERE segment_id = ?
                     """,
-                    (
-                        seg["source_filename"],
-                        seg["filename"],
-                        seg["page_index"],
-                        result["image_width"],
-                        result["image_height"],
-                        result["engine"],
-                        dumps(result["items"]),
-                        len(result["items"]),
-                        now,
-                        seg["id"],
-                    ),
+                    values,
                 )
                 run_id = existing["id"]
             else:
@@ -216,8 +252,9 @@ def ocr_drawing_segments(page_id: str | None = None) -> dict:
                     INSERT INTO drawing_ocr_runs
                     (id, segment_id, page_id, source_filename, segment_filename,
                      page_index, image_width, image_height, engine, items_json,
-                     item_count, status, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending_review', ?, ?)
+                     item_count, status, vectors_json, stages_json, counts_json,
+                     cleaned_path, preview_path, dxf_path, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending_review', ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         run_id,
@@ -231,6 +268,12 @@ def ocr_drawing_segments(page_id: str | None = None) -> dict:
                         result["engine"],
                         dumps(result["items"]),
                         len(result["items"]),
+                        dumps(result["vectors"]),
+                        dumps(result["stages"]),
+                        dumps(result["counts"]),
+                        result["cleaned_path"],
+                        result["preview_path"],
+                        result["dxf_path"],
                         now,
                         now,
                     ),
@@ -242,12 +285,22 @@ def ocr_drawing_segments(page_id: str | None = None) -> dict:
                 "page_id": seg["page_id"],
                 "segment_filename": seg["filename"],
                 "item_count": len(result["items"]),
+                "counts": result["counts"],
+                "dxf_url": f"/api/drawings-ocr/{seg['page_id']}/export.dxf",
                 "review_url": f"/drawing-review/{seg['page_id']}",
             }
         )
 
     return {
-        "engine": ENGINE_NAME,
+        "engine": "PP-OCRv6 + OpenCV vector pipeline",
+        "pipeline": [
+            "Drawing image",
+            "Image cleanup and deskew",
+            "Raster-to-vector line detection",
+            "PaddleOCR for annotations",
+            "Circle, arc and symbol detection",
+            "Export to DXF",
+        ],
         "processed": len(processed),
         "errors": errors,
         "runs": processed,

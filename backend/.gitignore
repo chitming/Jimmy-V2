@@ -2,6 +2,7 @@ data/uploads/
 data/pages/
 data/crops/
 data/library/
+data/pipeline/
 data/*.db
 .venv/
 __pycache__/

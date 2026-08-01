@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import {
+  downloadDrawingDxf,
   getDrawingOcr,
   runDrawingOcr,
   saveDrawingOcrReview,
@@ -13,6 +14,7 @@ export function DrawingReviewPage() {
   const [run, setRun] = useState<DrawingOcrRun | null>(null)
   const [items, setItems] = useState<DrawingOcrItem[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [showPreview, setShowPreview] = useState(true)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -22,6 +24,7 @@ export function DrawingReviewPage() {
     setRun(data)
     setItems(data.items)
     setSelectedId(data.items[0]?.id ?? null)
+    setShowPreview(Boolean(data.preview_url))
   }
 
   useEffect(() => {
@@ -50,9 +53,9 @@ export function DrawingReviewPage() {
     try {
       await runDrawingOcr(pageId)
       await load()
-      setMessage('PP-OCRv6 finished. Review the boxes on the canvas.')
+      setMessage('Drawing pipeline finished. Check vectors + OCR, then download DXF.')
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'OCR failed')
+      setError(err instanceof Error ? err.message : 'Pipeline failed')
     } finally {
       setBusy(false)
     }
@@ -65,9 +68,22 @@ export function DrawingReviewPage() {
       const saved = await saveDrawingOcrReview(pageId, items, 'reviewed')
       setRun(saved)
       setItems(saved.items)
-      setMessage('Review saved. Recognition result confirmed.')
+      setMessage('Review saved. Annotation text confirmed.')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Save failed')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function onDxf() {
+    setBusy(true)
+    setError(null)
+    try {
+      await downloadDrawingDxf(pageId)
+      setMessage('DXF downloaded.')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'DXF download failed')
     } finally {
       setBusy(false)
     }
@@ -82,7 +98,7 @@ export function DrawingReviewPage() {
             Back to library
           </Link>
           <button className="btn btn-primary" disabled={busy} onClick={() => void onRerun()}>
-            Run PP-OCRv6
+            Run Drawing pipeline
           </button>
         </div>
       </div>
@@ -92,10 +108,13 @@ export function DrawingReviewPage() {
   if (!run) {
     return (
       <div className="app-shell">
-        <div className="empty">Loading Drawing OCR result…</div>
+        <div className="empty">Loading Drawing pipeline result…</div>
       </div>
     )
   }
+
+  const canvasUrl = showPreview && run.preview_url ? run.preview_url : run.image_url
+  const counts = run.counts || {}
 
   return (
     <div className="app-shell">
@@ -105,7 +124,7 @@ export function DrawingReviewPage() {
             SHEET<span>SENSE</span>
           </Link>
           <div className="brand-sub">
-            Stream B · Drawing review · {run.source_filename}
+            Stream B · Drawing pipeline · {run.source_filename}
           </div>
         </div>
         <div className="nav-actions">
@@ -113,7 +132,10 @@ export function DrawingReviewPage() {
             Segments
           </Link>
           <button className="btn" disabled={busy} onClick={() => void onRerun()}>
-            Re-run PP-OCRv6
+            Re-run pipeline
+          </button>
+          <button className="btn" disabled={busy || !run.dxf_url} onClick={() => void onDxf()}>
+            Download DXF
           </button>
           <button className="btn btn-primary" disabled={busy} onClick={() => void onSaveReview()}>
             Save review
@@ -123,15 +145,34 @@ export function DrawingReviewPage() {
 
       <div className="workspace review-workspace">
         <aside className="panel">
-          <h2>Recognition check</h2>
+          <h2>Pipeline</h2>
           <p className="help">
-            Engine: <code>{run.engine}</code>. Click a box on the canvas or a row below. Edit text if
-            wrong, then Save review.
+            Drawing image → cleanup/deskew → vector lines → PP-OCRv6 → circles/arcs/symbols → DXF
           </p>
+          <div className="field-list" style={{ marginBottom: 12 }}>
+            {(run.stages || []).map((stage) => (
+              <div className="field" key={stage.id}>
+                <label>{stage.ok ? 'OK' : 'Fail'}</label>
+                <div>{stage.label}</div>
+              </div>
+            ))}
+          </div>
           <div className={`status-banner${run.status === 'reviewed' ? ' ok' : ''}`}>
-            {run.status === 'reviewed'
-              ? `Reviewed · ${items.length} text item(s)`
-              : `Pending review · ${items.length} text item(s)`}
+            lines {counts.lines ?? 0} · circles {counts.circles ?? 0} · arcs {counts.arcs ?? 0} ·
+            symbols {counts.symbols ?? 0} · text {counts.texts ?? items.length}
+          </div>
+
+          <div className="nav-actions" style={{ marginBottom: 12 }}>
+            <button
+              className={`pill${showPreview ? ' on' : ''}`}
+              onClick={() => setShowPreview(true)}
+              disabled={!run.preview_url}
+            >
+              Vector preview
+            </button>
+            <button className={`pill${!showPreview ? ' on' : ''}`} onClick={() => setShowPreview(false)}>
+              Original
+            </button>
           </div>
 
           <div className="ocr-list">
@@ -148,44 +189,44 @@ export function DrawingReviewPage() {
                 </span>
               </button>
             ))}
-            {items.length === 0 && (
-              <p className="help">No text detected. Try Re-run PP-OCRv6.</p>
-            )}
+            {items.length === 0 && <p className="help">No annotation text detected.</p>}
           </div>
         </aside>
 
         <div className="stage-wrap review-stage">
           <div className="stage">
-            <img src={run.image_url} alt="Drawing canvas OCR review" draggable={false} />
-            <div className="overlay review-overlay">
-              {items.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  className={`ocr-box${selectedId === item.id ? ' active' : ''}${item.edited ? ' edited' : ''}`}
-                  style={{
-                    left: `${item.box.x * 100}%`,
-                    top: `${item.box.y * 100}%`,
-                    width: `${item.box.w * 100}%`,
-                    height: `${item.box.h * 100}%`,
-                  }}
-                  onClick={() => setSelectedId(item.id)}
-                  title={item.text}
-                >
-                  <span>{item.text}</span>
-                </button>
-              ))}
-            </div>
+            <img src={canvasUrl} alt="Drawing pipeline review canvas" draggable={false} />
+            {!showPreview && (
+              <div className="overlay review-overlay">
+                {items.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className={`ocr-box${selectedId === item.id ? ' active' : ''}${item.edited ? ' edited' : ''}`}
+                    style={{
+                      left: `${item.box.x * 100}%`,
+                      top: `${item.box.y * 100}%`,
+                      width: `${item.box.w * 100}%`,
+                      height: `${item.box.h * 100}%`,
+                    }}
+                    onClick={() => setSelectedId(item.id)}
+                    title={item.text}
+                  >
+                    <span>{item.text}</span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
         <aside className="panel">
           <h2>Selected text</h2>
-          {!selected && <p className="help">Select a recognition box to inspect or correct it.</p>}
+          {!selected && <p className="help">Select an OCR item to inspect or correct it.</p>}
           {selected && (
             <>
               <label className="help" htmlFor="ocr-text-edit">
-                Recognized text
+                Recognized annotation
               </label>
               <textarea
                 id="ocr-text-edit"
@@ -205,6 +246,10 @@ export function DrawingReviewPage() {
               </div>
             </>
           )}
+          <p className="help" style={{ marginTop: 16 }}>
+            Symbols are heuristic candidates for now (closed shapes). Full AEC symbol training can
+            come next.
+          </p>
         </aside>
       </div>
 

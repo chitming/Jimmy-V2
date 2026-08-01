@@ -12,6 +12,7 @@ from .db import (
     CROPS_DIR,
     LIBRARY_DIR,
     PAGES_DIR,
+    PIPELINE_DIR,
     UPLOADS_DIR,
     connect,
     dumps,
@@ -22,6 +23,7 @@ from .db import (
     utc_now,
 )
 from .services.drawing_ocr import (
+    get_drawing_dxf_path,
     get_drawing_ocr_run,
     list_drawing_ocr_runs,
     ocr_drawing_segments,
@@ -50,6 +52,7 @@ app.add_middleware(
 app.mount("/media/pages", StaticFiles(directory=PAGES_DIR), name="pages")
 app.mount("/media/crops", StaticFiles(directory=CROPS_DIR), name="crops")
 app.mount("/media/library", StaticFiles(directory=LIBRARY_DIR), name="library")
+app.mount("/media/pipeline", StaticFiles(directory=PIPELINE_DIR), name="pipeline")
 
 
 class Box(BaseModel):
@@ -170,6 +173,18 @@ def get_drawing_ocr(page_id: str) -> dict:
     if run is None:
         raise HTTPException(404, "No Drawing OCR result for this page. Run PP-OCRv6 first.")
     return run
+
+
+@app.get("/api/drawings-ocr/{page_id}/export.dxf")
+def export_drawing_dxf(page_id: str):
+    path = get_drawing_dxf_path(page_id)
+    if path is None:
+        raise HTTPException(404, "DXF not found. Run the Drawing pipeline first.")
+    return FileResponse(
+        path,
+        media_type="application/dxf",
+        filename=f"{page_id}.dxf",
+    )
 
 
 @app.put("/api/drawings-ocr/{page_id}")

@@ -17,9 +17,10 @@ CROPS_DIR = DATA_DIR / "crops"
 LIBRARY_DIR = DATA_DIR / "library"
 INFO_BLOCK_DIR = LIBRARY_DIR / "Info Block"
 DRAWING_DIR = LIBRARY_DIR / "Drawing"
+PIPELINE_DIR = DATA_DIR / "pipeline"
 DB_PATH = DATA_DIR / "sheetsense.db"
 
-for path in (UPLOADS_DIR, PAGES_DIR, CROPS_DIR, INFO_BLOCK_DIR, DRAWING_DIR):
+for path in (UPLOADS_DIR, PAGES_DIR, CROPS_DIR, INFO_BLOCK_DIR, DRAWING_DIR, PIPELINE_DIR):
     path.mkdir(parents=True, exist_ok=True)
 
 _lock = threading.Lock()
@@ -134,11 +135,30 @@ def init_db() -> None:
                 status TEXT NOT NULL,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
+                vectors_json TEXT,
+                stages_json TEXT,
+                counts_json TEXT,
+                cleaned_path TEXT,
+                preview_path TEXT,
+                dxf_path TEXT,
                 FOREIGN KEY(segment_id) REFERENCES segments(id),
                 FOREIGN KEY(page_id) REFERENCES pages(id)
             );
             """
         )
+        _ensure_column(conn, "drawing_ocr_runs", "vectors_json", "TEXT")
+        _ensure_column(conn, "drawing_ocr_runs", "stages_json", "TEXT")
+        _ensure_column(conn, "drawing_ocr_runs", "counts_json", "TEXT")
+        _ensure_column(conn, "drawing_ocr_runs", "cleaned_path", "TEXT")
+        _ensure_column(conn, "drawing_ocr_runs", "preview_path", "TEXT")
+        _ensure_column(conn, "drawing_ocr_runs", "dxf_path", "TEXT")
+
+
+def _ensure_column(conn: sqlite3.Connection, table: str, column: str, decl: str) -> None:
+    rows = conn.execute(f"PRAGMA table_info({table})").fetchall()
+    names = {row["name"] for row in rows}
+    if column not in names:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {decl}")
 
 
 def row_to_dict(row: sqlite3.Row | None) -> dict[str, Any] | None:

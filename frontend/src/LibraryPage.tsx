@@ -89,7 +89,7 @@ export function LibraryPage() {
       const result = await runDrawingOcr()
       setDrawingRuns(result.all_runs)
       setMessage(
-        `PP-OCRv6 complete: ${result.processed} Drawing segment${result.processed === 1 ? '' : 's'}. Open review canvas to check results.`,
+        `Drawing pipeline complete: ${result.processed} segment${result.processed === 1 ? '' : 's'}. Open review canvas / download DXF.`,
       )
       await refresh()
       if (result.runs[0]) {
@@ -135,10 +135,10 @@ export function LibraryPage() {
       </section>
 
       <section className="panel" style={{ marginBottom: 22 }}>
-        <h2>Stream B · Drawing → PP-OCRv6</h2>
+        <h2>Stream B · Drawing pipeline → DXF</h2>
         <p className="help">
-          Process Drawing library JPGs with <code>PP-OCRv6</code>, then open the review canvas to
-          check and correct recognized text.
+          Drawing image → cleanup/deskew → vector lines → <code>PP-OCRv6</code> annotations →
+          circles/arcs/symbols → export DXF. Then open the review canvas to check results.
         </p>
         <div className="nav-actions" style={{ marginTop: 14 }}>
           <button
@@ -146,7 +146,7 @@ export function LibraryPage() {
             disabled={busy || counts.drawing === 0}
             onClick={() => void onDrawingOcr()}
           >
-            {busy ? 'Running PP-OCRv6…' : `Run PP-OCRv6 (${counts.drawing})`}
+            {busy ? 'Running pipeline…' : `Run Drawing pipeline (${counts.drawing})`}
           </button>
         </div>
         {drawingRuns.length > 0 && (
@@ -154,11 +154,13 @@ export function LibraryPage() {
             {drawingRuns.map((run) => (
               <div className="field" key={run.id}>
                 <label>
-                  {run.source_filename} · page {run.page_index + 1} · {run.item_count} text
+                  {run.source_filename} · page {run.page_index + 1} · text {run.item_count}
+                  {run.counts ? ` · lines ${run.counts.lines ?? 0}` : ''}
                   {run.status === 'reviewed' ? ' · reviewed' : ' · pending review'}
                 </label>
                 <div>
                   <Link to={run.review_url}>Open review canvas</Link>
+                  {run.dxf_url ? ' · DXF ready' : ''}
                 </div>
               </div>
             ))}

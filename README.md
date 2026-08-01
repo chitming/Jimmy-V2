@@ -60,11 +60,17 @@ On the Segment library page:
 2. Text is stored as generic `Field1`, `Field2`, `Field3`, … (no assumed labels)
 3. Click **Download Excel** → `sheetsense_info_blocks.xlsx`
 
-## Stream B — Drawing → PP-OCRv6 review
+## Stream B — Drawing pipeline → DXF
 
-1. Click **Run PP-OCRv6** on Drawing library JPGs
-2. Open the **review canvas**
-3. Check recognized boxes/text, edit if wrong, then **Save review**
+1. Click **Run Drawing pipeline**
+2. Steps:
+   - Image cleanup and deskew
+   - Raster-to-vector line detection
+   - PaddleOCR PP-OCRv6 for annotations
+   - Circle, arc and symbol detection
+   - Export to DXF
+3. Open the **review canvas** to check OCR text
+4. Download the `.dxf` file
 
 ## How learning works (v1)
 

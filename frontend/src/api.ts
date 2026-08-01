@@ -232,7 +232,24 @@ export type DrawingOcrRun = {
   created_at: string
   updated_at: string
   image_url: string
+  preview_url?: string | null
+  cleaned_url?: string | null
+  dxf_url?: string | null
   review_url: string
+  vectors?: {
+    lines: Array<Record<string, number | string>>
+    circles: Array<Record<string, number | string>>
+    arcs: Array<Record<string, number | string>>
+    symbols: Array<Record<string, number | string>>
+  }
+  stages?: Array<{ id: string; label: string; ok: boolean; detail?: Record<string, unknown> }>
+  counts?: {
+    lines?: number
+    circles?: number
+    arcs?: number
+    symbols?: number
+    texts?: number
+  }
 }
 
 export function listDrawingOcrRuns() {
@@ -243,9 +260,10 @@ export function runDrawingOcr(pageId?: string) {
   const query = pageId ? `?page_id=${encodeURIComponent(pageId)}` : ''
   return request<{
     engine: string
+    pipeline?: string[]
     processed: number
     errors: Array<{ segment_id: string; error: string }>
-    runs: Array<{ id: string; page_id: string; item_count: number; review_url: string }>
+    runs: Array<{ id: string; page_id: string; item_count: number; review_url: string; dxf_url?: string }>
     all_runs: DrawingOcrRun[]
   }>(`/api/drawings-ocr/run${query}`, { method: 'POST' })
 }
@@ -259,5 +277,27 @@ export function saveDrawingOcrReview(pageId: string, items: DrawingOcrItem[], st
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ items, status }),
+  })
+}
+
+export function downloadDrawingDxf(pageId: string) {
+  return fetch(`/api/drawings-ocr/${pageId}/export.dxf`).then(async (res) => {
+    if (!res.ok) {
+      let detail = res.statusText
+      try {
+        const data = await res.json()
+        detail = data.detail || detail
+      } catch {
+        /* ignore */
+      }
+      throw new Error(typeof detail === 'string' ? detail : 'DXF export failed')
+    }
+    const blob = await res.blob()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${pageId}.dxf`
+    a.click()
+    URL.revokeObjectURL(url)
   })
 }
