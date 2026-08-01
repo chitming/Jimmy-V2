@@ -397,21 +397,8 @@ def render_preview(
             2,
             cv2.LINE_AA,
         )
-    for symbol in symbols:
-        x, y, bw, bh = int(symbol["x"]), int(symbol["y"]), int(symbol["w"]), int(symbol["h"])
-        color = (90, 90, 255) if symbol.get("source") != "yolo" else (255, 120, 40)
-        cv2.rectangle(preview, (x, y), (x + bw, y + bh), color, 2)
-        label = str(symbol.get("label") or "symbol")
-        cv2.putText(
-            preview,
-            label[:28],
-            (x, max(14, y - 4)),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.45,
-            color,
-            1,
-            cv2.LINE_AA,
-        )
+    # Intentionally skip symbol boxes on preview — contour "candidate:*"
+    # overlays were drawing noisy red rectangles over linework.
 
     for item in ocr_items:
         box = item.get("box") or {}
@@ -473,12 +460,12 @@ def run_drawing_pipeline(image_path: Path, work_dir: Path) -> dict:
     ocr_items = ocr["items"]
 
     # 4) Circle, arc and symbol detection
+    # Contour "candidate:*" boxes are noisy false positives — do not use them.
     raw_circles, arcs = detect_circles_and_arcs(cleaned_bin)
     circles = clean_circles(raw_circles)
-    contour_symbols = detect_symbol_candidates(cleaned_bin)
     deskewed_bgr = cv2.cvtColor(deskewed_gray, cv2.COLOR_GRAY2BGR)
     yolo_symbols, yolo_meta = recognise_symbols(deskewed_bgr)
-    symbols = yolo_symbols if yolo_symbols else contour_symbols
+    symbols = yolo_symbols
 
     # 5) Export to DXF — one file for this Drawing image loop
     dxf_name = f"{image_path.stem}.dxf"
@@ -536,6 +523,7 @@ def run_drawing_pipeline(image_path: Path, work_dir: Path) -> dict:
                 "arcs": len(arcs),
                 "symbols": len(symbols),
                 "yolo": yolo_meta,
+                "contour_candidates_ignored": True,
             },
         },
         {
