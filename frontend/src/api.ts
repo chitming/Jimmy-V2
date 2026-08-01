@@ -217,7 +217,14 @@ export type DrawingOcrRun = {
   image_width: number
   image_height: number
   engine: string
-  items: []
+  items: Array<{
+    id: string
+    text: string
+    score: number
+    box: Box
+    pixel_box?: number[]
+    edited?: boolean
+  }>
   item_count: number
   status: string
   created_at: string
@@ -226,6 +233,7 @@ export type DrawingOcrRun = {
   preview_url?: string | null
   cleaned_url?: string | null
   dxf_url?: string | null
+  loop?: string[]
   vectors?: {
     lines: Array<Record<string, number | string>>
     circles: Array<Record<string, number | string>>
@@ -238,6 +246,7 @@ export type DrawingOcrRun = {
     circles?: number
     arcs?: number
     symbols?: number
+    texts?: number
   }
 }
 

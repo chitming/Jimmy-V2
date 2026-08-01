@@ -6,7 +6,16 @@ from ..db import LIBRARY_DIR, PIPELINE_DIR, connect, dumps, loads, new_id, utc_n
 from .drawing_pipeline import run_drawing_pipeline
 
 
-ENGINE_NAME = "OpenCV + Shapely + YOLO + ezdxf"
+ENGINE_NAME = "cleanup → lines → PP-OCRv6 → circles/arcs/symbols → DXF"
+
+STREAM_B_LOOP = [
+    "Drawing image",
+    "Image cleanup and deskew",
+    "Raster-to-vector line detection",
+    "PaddleOCR for annotations",
+    "Circle, arc and symbol detection",
+    "Export to DXF",
+]
 
 
 def _run_payload(row) -> dict:
@@ -25,8 +34,8 @@ def _run_payload(row) -> dict:
         "image_width": row["image_width"],
         "image_height": row["image_height"],
         "engine": row["engine"],
-        "items": [],
-        "item_count": 0,
+        "items": loads(row["items_json"]) if row["items_json"] else [],
+        "item_count": row["item_count"],
         "status": row["status"],
         "created_at": row["created_at"],
         "updated_at": row["updated_at"],
@@ -37,6 +46,7 @@ def _run_payload(row) -> dict:
         "preview_url": f"/media/pipeline/{preview_name}" if has_preview else None,
         "cleaned_url": f"/media/pipeline/{cleaned_name}" if row["cleaned_path"] else None,
         "dxf_url": f"/api/drawings-ocr/{page_id}/export.dxf" if has_dxf else None,
+        "loop": STREAM_B_LOOP,
     }
 
 
@@ -70,7 +80,7 @@ def get_drawing_dxf_path(page_id: str) -> Path | None:
 
 
 def ocr_drawing_segments(page_id: str | None = None) -> dict:
-    """Run Stream B geometry pipeline on Drawing library segments (no OCR)."""
+    """Run Stream B once per Drawing image: one loop → one DXF."""
     query = """
         SELECT s.*, p.page_index, d.filename AS source_filename
         FROM segments s
@@ -91,6 +101,7 @@ def ocr_drawing_segments(page_id: str | None = None) -> dict:
     errors = []
     now = utc_now()
 
+    # One Drawing image → one full loop → one DXF file.
     for seg in segments:
         image_path = LIBRARY_DIR / seg["relative_path"]
         if not image_path.exists():
@@ -108,6 +119,7 @@ def ocr_drawing_segments(page_id: str | None = None) -> dict:
             errors.append({"segment_id": seg["id"], "error": str(exc)})
             continue
 
+        items = result.get("items") or []
         with connect() as conn:
             existing = conn.execute(
                 "SELECT id FROM drawing_ocr_runs WHERE segment_id = ?",
@@ -120,8 +132,8 @@ def ocr_drawing_segments(page_id: str | None = None) -> dict:
                 result["image_width"],
                 result["image_height"],
                 result["engine"],
-                dumps([]),
-                0,
+                dumps(items),
+                len(items),
                 dumps(result["vectors"]),
                 dumps(result["stages"]),
                 dumps(result["counts"]),
@@ -167,8 +179,8 @@ def ocr_drawing_segments(page_id: str | None = None) -> dict:
                         result["image_width"],
                         result["image_height"],
                         result["engine"],
-                        dumps([]),
-                        0,
+                        dumps(items),
+                        len(items),
                         dumps(result["vectors"]),
                         dumps(result["stages"]),
                         dumps(result["counts"]),
@@ -185,21 +197,17 @@ def ocr_drawing_segments(page_id: str | None = None) -> dict:
                 "id": run_id,
                 "page_id": seg["page_id"],
                 "segment_filename": seg["filename"],
-                "item_count": 0,
+                "item_count": len(items),
                 "counts": result["counts"],
                 "dxf_url": f"/api/drawings-ocr/{seg['page_id']}/export.dxf",
                 "preview_url": f"/media/pipeline/{seg['page_id']}/preview.png",
+                "loop": STREAM_B_LOOP,
             }
         )
 
     return {
         "engine": ENGINE_NAME,
-        "pipeline": [
-            "OpenCV — detect lines, circles and contours",
-            "Shapely — join and clean geometry",
-            "YOLO — recognise valves, equipment and symbols",
-            "ezdxf — generate the DXF file",
-        ],
+        "pipeline": STREAM_B_LOOP,
         "processed": len(processed),
         "errors": errors,
         "runs": processed,

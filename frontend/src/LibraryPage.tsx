@@ -89,7 +89,7 @@ export function LibraryPage() {
       const result = await runDrawingOcr()
       setDrawingRuns(result.all_runs)
       setMessage(
-        `Drawing pipeline complete: ${result.processed} segment${result.processed === 1 ? '' : 's'}. Download DXF when ready.`,
+        `Stream B complete: ${result.processed} Drawing file${result.processed === 1 ? '' : 's'} → ${result.processed} DXF. Download when ready.`,
       )
       await refresh()
     } catch (err) {
@@ -147,8 +147,9 @@ export function LibraryPage() {
       <section className="panel" style={{ marginBottom: 22 }}>
         <h2>Stream B · Drawing pipeline → DXF</h2>
         <p className="help">
-          <code>OpenCV</code> lines/circles/contours → <code>Shapely</code> clean geometry →{' '}
-          <code>YOLO</code> valves/equipment/symbols → <code>ezdxf</code> DXF export.
+          One Drawing file → one loop → one DXF:{' '}
+          cleanup/deskew → raster-to-vector lines → PaddleOCR annotations →
+          circles/arcs/symbols → DXF.
         </p>
         <div className="nav-actions" style={{ marginTop: 14 }}>
           <button
@@ -164,8 +165,9 @@ export function LibraryPage() {
             {drawingRuns.map((run) => (
               <div className="field" key={run.id}>
                 <label>
-                  {run.source_filename} · page {run.page_index + 1}
+                  {run.segment_filename} · 1 DXF
                   {run.counts ? ` · lines ${run.counts.lines ?? 0}` : ''}
+                  {run.counts ? ` · text ${run.counts.texts ?? run.item_count ?? 0}` : ''}
                   {run.counts ? ` · circles ${run.counts.circles ?? 0}` : ''}
                   {run.counts ? ` · symbols ${run.counts.symbols ?? 0}` : ''}
                 </label>

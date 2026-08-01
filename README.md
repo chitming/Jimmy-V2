@@ -62,17 +62,24 @@ On the Segment library page:
 
 ## Stream B — Drawing pipeline → DXF
 
-Tool stack:
+One Drawing image runs one loop and exports one DXF:
 
-| Tool | Role |
-|---|---|
-| OpenCV | Detect lines, circles and contours |
-| Shapely | Join and clean geometry |
-| YOLO | Recognise valves, equipment and symbols |
-| ezdxf | Generate the DXF file |
+```
+Drawing image
+    ↓
+Image cleanup and deskew
+    ↓
+Raster-to-vector line detection
+    ↓
+PaddleOCR for annotations
+    ↓
+Circle, arc and symbol detection
+    ↓
+Export to DXF
+```
 
-1. Click **Run Drawing pipeline**
-2. Download the `.dxf` (vector preview is also generated)
+1. Click **Run Drawing pipeline** (loops each Drawing JPG once)
+2. Download the matching `.dxf` (vector preview is also generated)
 
 Optional: place a fine-tuned weights file at `backend/data/models/aec_symbols.pt` to replace YOLO-World open-vocab detection.
 

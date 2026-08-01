@@ -436,37 +436,53 @@ def render_preview(
 
 
 def run_drawing_pipeline(image_path: Path, work_dir: Path) -> dict:
+    """Run one Drawing file through the Stream B loop.
+
+    Drawing image
+        ↓
+    Image cleanup and deskew
+        ↓
+    Raster-to-vector line detection
+        ↓
+    PaddleOCR for annotations
+        ↓
+    Circle, arc and symbol detection
+        ↓
+    Export to DXF  (one DXF per Drawing file)
     """
-    Stack:
-      OpenCV   → lines, circles, contours
-      Shapely  → join and clean geometry
-      YOLO     → valves, equipment and symbols
-      ezdxf    → DXF export
-    """
+    from .annotations_ocr import run_ppocrv6_on_image
+
     work_dir.mkdir(parents=True, exist_ok=True)
     image_bgr = cv2.imread(str(image_path), cv2.IMREAD_COLOR)
     if image_bgr is None:
         raise ValueError(f"Could not read image: {image_path}")
 
+    # 1) Image cleanup and deskew
     deskewed_gray, cleaned_gray, cleaned_bin, clean_meta = cleanup_and_deskew(image_bgr)
     cleaned_path = work_dir / "cleaned.png"
+    ocr_input_path = work_dir / "ocr_input.png"
     cv2.imwrite(str(cleaned_path), cleaned_gray)
+    cv2.imwrite(str(ocr_input_path), deskewed_gray)
 
-    # OpenCV detections
+    # 2) Raster-to-vector line detection
     raw_lines = detect_lines(cleaned_bin)
-    raw_circles, arcs = detect_circles_and_arcs(cleaned_bin)
-    contour_symbols = detect_symbol_candidates(cleaned_bin)
-
-    # Shapely geometry cleanup
     lines = join_and_clean_lines(raw_lines)
-    circles = clean_circles(raw_circles)
 
-    # YOLO symbol recognition on deskewed color image
+    # 3) PaddleOCR for annotations
+    ocr = run_ppocrv6_on_image(ocr_input_path)
+    ocr_items = ocr["items"]
+
+    # 4) Circle, arc and symbol detection
+    raw_circles, arcs = detect_circles_and_arcs(cleaned_bin)
+    circles = clean_circles(raw_circles)
+    contour_symbols = detect_symbol_candidates(cleaned_bin)
     deskewed_bgr = cv2.cvtColor(deskewed_gray, cv2.COLOR_GRAY2BGR)
     yolo_symbols, yolo_meta = recognise_symbols(deskewed_bgr)
     symbols = yolo_symbols if yolo_symbols else contour_symbols
 
-    dxf_path = work_dir / "export.dxf"
+    # 5) Export to DXF — one file for this Drawing image loop
+    dxf_name = f"{image_path.stem}.dxf"
+    dxf_path = work_dir / dxf_name
     export_dxf(
         dxf_path,
         width=clean_meta["width"],
@@ -475,10 +491,14 @@ def run_drawing_pipeline(image_path: Path, work_dir: Path) -> dict:
         circles=circles,
         arcs=arcs,
         symbols=symbols,
-        ocr_items=[],
+        ocr_items=ocr_items,
     )
+    # Stable alias used by download API / older clients.
+    alias_path = work_dir / "export.dxf"
+    if alias_path.resolve() != dxf_path.resolve():
+        alias_path.write_bytes(dxf_path.read_bytes())
 
-    preview = render_preview(cleaned_gray, lines, circles, arcs, symbols, [])
+    preview = render_preview(cleaned_gray, lines, circles, arcs, symbols, ocr_items)
     preview_path = work_dir / "preview.png"
     cv2.imwrite(str(preview_path), preview)
 
@@ -490,63 +510,68 @@ def run_drawing_pipeline(image_path: Path, work_dir: Path) -> dict:
     }
     stages = [
         {
-            "id": "opencv",
-            "label": "OpenCV — detect lines, circles and contours",
+            "id": "cleanup",
+            "label": "Image cleanup and deskew",
+            "ok": True,
+            "detail": clean_meta,
+        },
+        {
+            "id": "lines",
+            "label": "Raster-to-vector line detection",
+            "ok": True,
+            "detail": {"raw_lines": len(raw_lines), "lines": len(lines)},
+        },
+        {
+            "id": "paddleocr",
+            "label": "PaddleOCR for annotations",
+            "ok": True,
+            "detail": {"count": len(ocr_items), "engine": "PP-OCRv6"},
+        },
+        {
+            "id": "geometry",
+            "label": "Circle, arc and symbol detection",
             "ok": True,
             "detail": {
-                "raw_lines": len(raw_lines),
-                "circles": len(raw_circles),
+                "circles": len(circles),
                 "arcs": len(arcs),
-                "contours": len(contour_symbols),
-                "deskew": clean_meta,
+                "symbols": len(symbols),
+                "yolo": yolo_meta,
             },
         },
         {
-            "id": "shapely",
-            "label": "Shapely — join and clean geometry",
-            "ok": True,
-            "detail": {
-                "lines_in": len(raw_lines),
-                "lines_out": len(lines),
-                "circles_out": len(circles),
-            },
-        },
-        {
-            "id": "yolo",
-            "label": "YOLO — recognise valves, equipment and symbols",
-            "ok": True,
-            "detail": yolo_meta,
-        },
-        {
-            "id": "ezdxf",
-            "label": "ezdxf — generate the DXF file",
+            "id": "dxf",
+            "label": "Export to DXF",
             "ok": dxf_path.exists(),
-            "detail": {"path": str(dxf_path)},
+            "detail": {"path": str(dxf_path), "alias": str(alias_path)},
         },
     ]
 
     return {
-        "engine": "OpenCV + Shapely + YOLO + ezdxf",
+        "engine": "cleanup → lines → PP-OCRv6 → circles/arcs/symbols → DXF",
         "image_width": clean_meta["width"],
         "image_height": clean_meta["height"],
         "cleanup": clean_meta,
-        "items": [],
+        "items": ocr_items,
         "vectors": vectors,
         "stages": stages,
         "cleaned_path": str(cleaned_path),
         "preview_path": str(preview_path),
-        "dxf_path": str(dxf_path),
+        "dxf_path": str(alias_path),
+        "dxf_named_path": str(dxf_path),
         "counts": {
             "lines": len(lines),
             "circles": len(circles),
             "arcs": len(arcs),
             "symbols": len(symbols),
+            "texts": len(ocr_items),
             "raw_lines": len(raw_lines),
         },
-        "stack": {
-            "OpenCV": "Detect lines, circles and contours",
-            "ezdxf": "Generate the DXF file",
-            "Shapely": "Join and clean geometry",
-            "YOLO": "Recognise valves, equipment and symbols",
-        },
+        "loop": [
+            "Drawing image",
+            "Image cleanup and deskew",
+            "Raster-to-vector line detection",
+            "PaddleOCR for annotations",
+            "Circle, arc and symbol detection",
+            "Export to DXF",
+        ],
     }

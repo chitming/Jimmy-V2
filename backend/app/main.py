@@ -149,7 +149,7 @@ def export_info_blocks_excel():
 def get_drawing_ocr_list() -> dict:
     runs = list_drawing_ocr_runs()
     return {
-        "engine": "OpenCV + Shapely + YOLO + ezdxf",
+        "engine": "cleanup → lines → PP-OCRv6 → circles/arcs/symbols → DXF",
         "count": len(runs),
         "runs": runs,
     }
