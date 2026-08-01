@@ -118,6 +118,25 @@ def init_db() -> None:
                 FOREIGN KEY(segment_id) REFERENCES segments(id),
                 FOREIGN KEY(page_id) REFERENCES pages(id)
             );
+
+            CREATE TABLE IF NOT EXISTS drawing_ocr_runs (
+                id TEXT PRIMARY KEY,
+                segment_id TEXT NOT NULL UNIQUE,
+                page_id TEXT NOT NULL,
+                source_filename TEXT NOT NULL,
+                segment_filename TEXT NOT NULL,
+                page_index INTEGER NOT NULL,
+                image_width INTEGER NOT NULL,
+                image_height INTEGER NOT NULL,
+                engine TEXT NOT NULL,
+                items_json TEXT NOT NULL,
+                item_count INTEGER NOT NULL,
+                status TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY(segment_id) REFERENCES segments(id),
+                FOREIGN KEY(page_id) REFERENCES pages(id)
+            );
             """
         )
 

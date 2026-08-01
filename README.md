@@ -60,7 +60,11 @@ On the Segment library page:
 2. Text is stored as generic `Field1`, `Field2`, `Field3`, … (no assumed labels)
 3. Click **Download Excel** → `sheetsense_info_blocks.xlsx`
 
-Drawing understanding (Stream B) is not started yet.
+## Stream B — Drawing → PP-OCRv6 review
+
+1. Click **Run PP-OCRv6** on Drawing library JPGs
+2. Open the **review canvas**
+3. Check recognized boxes/text, edit if wrong, then **Save review**
 
 ## How learning works (v1)
 

@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import {
   downloadInfoBlockExcel,
   getInfoBlockRows,
   getLibrary,
+  listDrawingOcrRuns,
+  runDrawingOcr,
   runInfoBlockOcr,
+  type DrawingOcrRun,
   type InfoBlockRow,
   type LibraryItem,
 } from './api'
@@ -12,21 +15,28 @@ import {
 type Filter = 'all' | 'info_block' | 'drawing'
 
 export function LibraryPage() {
+  const navigate = useNavigate()
   const [items, setItems] = useState<LibraryItem[]>([])
   const [counts, setCounts] = useState({ info_block: 0, drawing: 0 })
   const [filter, setFilter] = useState<Filter>('all')
   const [rows, setRows] = useState<InfoBlockRow[]>([])
   const [fieldHeaders, setFieldHeaders] = useState<string[]>([])
+  const [drawingRuns, setDrawingRuns] = useState<DrawingOcrRun[]>([])
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   async function refresh() {
-    const [library, info] = await Promise.all([getLibrary(), getInfoBlockRows()])
+    const [library, info, drawings] = await Promise.all([
+      getLibrary(),
+      getInfoBlockRows(),
+      listDrawingOcrRuns(),
+    ])
     setItems(library.items)
     setCounts(library.counts)
     setRows(info.rows)
     setFieldHeaders(info.field_headers)
+    setDrawingRuns(drawings.runs)
   }
 
   useEffect(() => {
@@ -71,6 +81,27 @@ export function LibraryPage() {
     }
   }
 
+  async function onDrawingOcr() {
+    setBusy(true)
+    setError(null)
+    setMessage(null)
+    try {
+      const result = await runDrawingOcr()
+      setDrawingRuns(result.all_runs)
+      setMessage(
+        `PP-OCRv6 complete: ${result.processed} Drawing segment${result.processed === 1 ? '' : 's'}. Open review canvas to check results.`,
+      )
+      await refresh()
+      if (result.runs[0]) {
+        navigate(result.runs[0].review_url)
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Drawing OCR failed')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   return (
     <div className="app-shell">
       <header className="topbar">
@@ -87,12 +118,11 @@ export function LibraryPage() {
         </div>
       </header>
 
-      <section className="panel" style={{ marginBottom: 22 }}>
+      <section className="panel" style={{ marginBottom: 16 }}>
         <h2>Stream A · Info Block → Excel</h2>
         <p className="help">
           OCR every saved Info Block into generic <code>Field1</code>, <code>Field2</code>, …
-          columns (no assumed title-block labels), then export an Excel table. Drawing stream is
-          paused until we agree the process.
+          columns, then export an Excel table.
         </p>
         <div className="nav-actions" style={{ marginTop: 14 }}>
           <button className="btn btn-primary" disabled={busy || counts.info_block === 0} onClick={() => void onOcr()}>
@@ -102,6 +132,38 @@ export function LibraryPage() {
             Download Excel
           </button>
         </div>
+      </section>
+
+      <section className="panel" style={{ marginBottom: 22 }}>
+        <h2>Stream B · Drawing → PP-OCRv6</h2>
+        <p className="help">
+          Process Drawing library JPGs with <code>PP-OCRv6</code>, then open the review canvas to
+          check and correct recognized text.
+        </p>
+        <div className="nav-actions" style={{ marginTop: 14 }}>
+          <button
+            className="btn btn-primary"
+            disabled={busy || counts.drawing === 0}
+            onClick={() => void onDrawingOcr()}
+          >
+            {busy ? 'Running PP-OCRv6…' : `Run PP-OCRv6 (${counts.drawing})`}
+          </button>
+        </div>
+        {drawingRuns.length > 0 && (
+          <div className="field-list" style={{ marginTop: 14 }}>
+            {drawingRuns.map((run) => (
+              <div className="field" key={run.id}>
+                <label>
+                  {run.source_filename} · page {run.page_index + 1} · {run.item_count} text
+                  {run.status === 'reviewed' ? ' · reviewed' : ' · pending review'}
+                </label>
+                <div>
+                  <Link to={run.review_url}>Open review canvas</Link>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </section>
 
       {rows.length > 0 && (
@@ -176,25 +238,33 @@ export function LibraryPage() {
       )}
 
       <div className="drawing-grid">
-        {visible.map((item) => (
-          <article key={item.id} className="drawing-card">
-            <div className="drawing-thumb">
-              <img src={item.url} alt={item.filename} />
-            </div>
-            <div className="drawing-meta">
-              <h3>{item.filename}</h3>
-              <p>
-                {item.folder} · from {item.source_filename} · page {item.page_index + 1}
-              </p>
-              <div className="pill-row">
-                <span className="pill on">{item.folder}</span>
-                <Link className="pill" to={`/teach/${item.page_id}`}>
-                  Open sheet
-                </Link>
+        {visible.map((item) => {
+          const drawingRun = drawingRuns.find((run) => run.page_id === item.page_id)
+          return (
+            <article key={item.id} className="drawing-card">
+              <div className="drawing-thumb">
+                <img src={item.url} alt={item.filename} />
               </div>
-            </div>
-          </article>
-        ))}
+              <div className="drawing-meta">
+                <h3>{item.filename}</h3>
+                <p>
+                  {item.folder} · from {item.source_filename} · page {item.page_index + 1}
+                </p>
+                <div className="pill-row">
+                  <span className="pill on">{item.folder}</span>
+                  <Link className="pill" to={`/teach/${item.page_id}`}>
+                    Open sheet
+                  </Link>
+                  {item.kind === 'drawing' && drawingRun && (
+                    <Link className="pill" to={drawingRun.review_url}>
+                      Review OCR
+                    </Link>
+                  )}
+                </div>
+              </div>
+            </article>
+          )
+        })}
       </div>
 
       {message && (

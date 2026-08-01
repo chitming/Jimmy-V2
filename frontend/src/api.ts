@@ -206,3 +206,58 @@ export function downloadInfoBlockExcel() {
     URL.revokeObjectURL(url)
   })
 }
+
+export type DrawingOcrItem = {
+  id: string
+  text: string
+  score: number
+  box: Box
+  pixel_box: number[]
+  edited?: boolean
+}
+
+export type DrawingOcrRun = {
+  id: string
+  segment_id: string
+  page_id: string
+  source_filename: string
+  segment_filename: string
+  page_index: number
+  image_width: number
+  image_height: number
+  engine: string
+  items: DrawingOcrItem[]
+  item_count: number
+  status: string
+  created_at: string
+  updated_at: string
+  image_url: string
+  review_url: string
+}
+
+export function listDrawingOcrRuns() {
+  return request<{ engine: string; count: number; runs: DrawingOcrRun[] }>('/api/drawings-ocr')
+}
+
+export function runDrawingOcr(pageId?: string) {
+  const query = pageId ? `?page_id=${encodeURIComponent(pageId)}` : ''
+  return request<{
+    engine: string
+    processed: number
+    errors: Array<{ segment_id: string; error: string }>
+    runs: Array<{ id: string; page_id: string; item_count: number; review_url: string }>
+    all_runs: DrawingOcrRun[]
+  }>(`/api/drawings-ocr/run${query}`, { method: 'POST' })
+}
+
+export function getDrawingOcr(pageId: string) {
+  return request<DrawingOcrRun>(`/api/drawings-ocr/${pageId}`)
+}
+
+export function saveDrawingOcrReview(pageId: string, items: DrawingOcrItem[], status = 'reviewed') {
+  return request<DrawingOcrRun>(`/api/drawings-ocr/${pageId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ items, status }),
+  })
+}

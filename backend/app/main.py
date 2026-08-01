@@ -21,6 +21,12 @@ from .db import (
     row_to_dict,
     utc_now,
 )
+from .services.drawing_ocr import (
+    get_drawing_ocr_run,
+    list_drawing_ocr_runs,
+    ocr_drawing_segments,
+    update_drawing_ocr_items,
+)
 from .services.info_block_excel import (
     build_info_block_excel,
     list_info_block_rows,
@@ -86,6 +92,11 @@ def stats() -> dict:
     }
 
 
+class DrawingOcrUpdatePayload(BaseModel):
+    items: list[dict]
+    status: str = "reviewed"
+
+
 @app.get("/api/library")
 def get_library(kind: str | None = None) -> dict:
     if kind is not None and kind not in {"info_block", "drawing"}:
@@ -135,6 +146,40 @@ def export_info_blocks_excel():
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers=headers,
     )
+
+
+@app.get("/api/drawings-ocr")
+def get_drawing_ocr_list() -> dict:
+    runs = list_drawing_ocr_runs()
+    return {"engine": "PP-OCRv6", "count": len(runs), "runs": runs}
+
+
+@app.post("/api/drawings-ocr/run")
+def run_drawing_ocr(page_id: str | None = None) -> dict:
+    result = ocr_drawing_segments(page_id=page_id)
+    if result["processed"] == 0 and result["errors"]:
+        raise HTTPException(400, detail=result)
+    if result["processed"] == 0:
+        raise HTTPException(400, "No Drawing segments found in the library yet.")
+    return result
+
+
+@app.get("/api/drawings-ocr/{page_id}")
+def get_drawing_ocr(page_id: str) -> dict:
+    run = get_drawing_ocr_run(page_id)
+    if run is None:
+        raise HTTPException(404, "No Drawing OCR result for this page. Run PP-OCRv6 first.")
+    return run
+
+
+@app.put("/api/drawings-ocr/{page_id}")
+def put_drawing_ocr(page_id: str, payload: DrawingOcrUpdatePayload) -> dict:
+    try:
+        return update_drawing_ocr_items(page_id, payload.items, payload.status)
+    except KeyError:
+        raise HTTPException(404, "No Drawing OCR result for this page") from None
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
 
 
 @app.post("/api/drawings/upload")
