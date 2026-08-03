@@ -18,10 +18,16 @@ LIBRARY_DIR = DATA_DIR / "library"
 INFO_BLOCK_DIR = LIBRARY_DIR / "Info Block"
 DRAWING_DIR = LIBRARY_DIR / "Drawing"
 PIPELINE_DIR = DATA_DIR / "pipeline"
-DB_PATH = DATA_DIR / "sheetsense.db"
+EXPORTS_DIR = DATA_DIR / "exports"
+DB_PATH = DATA_DIR / "tdr.db"
+_LEGACY_DB_PATH = DATA_DIR / "sheetsense.db"
 
-for path in (UPLOADS_DIR, PAGES_DIR, CROPS_DIR, INFO_BLOCK_DIR, DRAWING_DIR, PIPELINE_DIR):
+for path in (UPLOADS_DIR, PAGES_DIR, CROPS_DIR, INFO_BLOCK_DIR, DRAWING_DIR, PIPELINE_DIR, EXPORTS_DIR):
     path.mkdir(parents=True, exist_ok=True)
+
+# One-time rename from the old SheetSense database filename.
+if _LEGACY_DB_PATH.exists() and not DB_PATH.exists():
+    _LEGACY_DB_PATH.rename(DB_PATH)
 
 _lock = threading.Lock()
 

@@ -41,9 +41,9 @@ export function HomePage() {
       <header className="topbar">
         <div className="brand">
           <Link to="/" className="brand-mark" aria-label="Home">
-            SHEET<span>SENSE</span>
+            T<span>DR</span>
           </Link>
-          <div className="brand-sub">Technical drawing layout teacher</div>
+          <div className="brand-sub">Technical Drawing Reader</div>
         </div>
         <div className="nav-actions">
           <Link className="btn btn-ghost" to="/library">
@@ -69,8 +69,9 @@ export function HomePage() {
       <section className="hero">
         <div className="hero-copy">
           <h1>
-            SHEET<span>SENSE</span>
+            T<span>DR</span>
           </h1>
+          <p className="hero-product">Technical Drawing Reader</p>
           <p>
             Teach the machine where the information block and drawing canvas live. After a few examples,
             it starts proposing the layout for the next sheet.

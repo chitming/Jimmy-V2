@@ -73,7 +73,7 @@ export function LibraryPage() {
     setError(null)
     try {
       await downloadInfoBlockExcel()
-      setMessage('Excel downloaded: sheetsense_info_blocks.xlsx')
+      setMessage('Excel downloaded: tdr_info_blocks.xlsx')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Excel export failed')
     } finally {
@@ -116,10 +116,10 @@ export function LibraryPage() {
     <div className="app-shell">
       <header className="topbar">
         <div className="brand">
-          <Link to="/" className="brand-mark">
-            SHEET<span>SENSE</span>
+          <Link to="/" className="brand-mark" aria-label="Home">
+            T<span>DR</span>
           </Link>
-          <div className="brand-sub">Segment library</div>
+          <div className="brand-sub">Technical Drawing Reader · Segment library</div>
         </div>
         <div className="nav-actions">
           <Link className="btn btn-ghost" to="/">

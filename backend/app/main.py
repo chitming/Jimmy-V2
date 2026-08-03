@@ -38,7 +38,7 @@ from .services.library import get_segment_path, library_counts, list_library, sa
 from .services.ocr import extract_information_block
 from .services.render import render_pdf_pages, save_image_as_page
 
-app = FastAPI(title="SheetSense API", version="0.1.0")
+app = FastAPI(title="TDR API", version="0.1.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -136,7 +136,7 @@ def export_info_blocks_excel():
         )
     content = build_info_block_excel()
     headers = {
-        "Content-Disposition": 'attachment; filename="sheetsense_info_blocks.xlsx"'
+        "Content-Disposition": 'attachment; filename="tdr_info_blocks.xlsx"'
     }
     return Response(
         content=content,

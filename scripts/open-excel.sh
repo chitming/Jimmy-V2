@@ -13,7 +13,7 @@ Usage:
   open-excel.sh inspect <file.xlsx>   Print sheet preview in the terminal
   open-excel.sh html <file.xlsx>      Convert to HTML for browser inspection
   open-excel.sh csv <file.xlsx>       Convert to CSV and print path
-  open-excel.sh export-latest         Build SheetSense Info Block Excel, then open it
+  open-excel.sh export-latest         Build TDR Info Block Excel, then open it
 
 Installed tool:
   - LibreOffice Calc  : open / convert .xlsx .xls .ods
@@ -39,7 +39,7 @@ open_gui() {
 
 to_html() {
   need_file "$1"
-  outdir="$(mktemp -d /tmp/sheetsense-xlsx-XXXXXX)"
+  outdir="$(mktemp -d /tmp/tdr-xlsx-XXXXXX)"
   libreoffice --headless --convert-to html --outdir "$outdir" "$1" >/dev/null
   html="$(find "$outdir" -maxdepth 1 -name '*.html' | head -n 1)"
   [[ -n "$html" ]] || { echo "HTML conversion failed"; exit 1; }
@@ -48,7 +48,7 @@ to_html() {
 
 to_csv() {
   need_file "$1"
-  outdir="$(mktemp -d /tmp/sheetsense-xlsx-XXXXXX)"
+  outdir="$(mktemp -d /tmp/tdr-xlsx-XXXXXX)"
   libreoffice --headless --convert-to csv --outdir "$outdir" "$1" >/dev/null
   csv="$(find "$outdir" -maxdepth 1 -name '*.csv' | head -n 1)"
   [[ -n "$csv" ]] || { echo "CSV conversion failed"; exit 1; }
@@ -69,14 +69,14 @@ inspect_terminal() {
 }
 
 export_latest() {
-  local out="$ROOT/backend/data/exports/sheetsense_info_blocks.xlsx"
+  local out="$ROOT/backend/data/exports/tdr_info_blocks.xlsx"
   mkdir -p "$(dirname "$out")"
   (
     cd "$ROOT/backend"
     PYTHONPATH=. .venv/bin/python - <<'PY'
 from pathlib import Path
 from app.services.info_block_excel import build_info_block_excel
-out = Path("data/exports/sheetsense_info_blocks.xlsx")
+out = Path("data/exports/tdr_info_blocks.xlsx")
 out.parent.mkdir(parents=True, exist_ok=True)
 out.write_bytes(build_info_block_excel())
 print(out.resolve())

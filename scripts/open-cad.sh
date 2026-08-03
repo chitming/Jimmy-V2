@@ -17,7 +17,7 @@ Installed tools:
   - LibreCAD      : DXF open / dxf2pdf
   - Inkscape      : DXF/SVG/PDF view & convert
   - DWF web viewer: tools/dwf-viewer (DWF/DWFx)
-  - ezdxf         : Python DXF read/write (SheetSense backend)
+  - ezdxf         : Python DXF read/write (TDR backend)
 EOF
 }
 

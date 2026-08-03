@@ -11,11 +11,11 @@ Installed here:
   ```
 - Online fallback: https://viewer.autodesk.com
 
-## DXF (SheetSense export)
+## DXF (TDR export)
 - **LibreCAD**: `librecad file.dxf`
 - Convert DXF → PDF: `librecad dxf2pdf -o out.pdf file.dxf`
 - **Inkscape**: can open/import many DXF/PDF files
-- **ezdxf** (Python): already in SheetSense backend
+- **ezdxf** (Python): already in the TDR backend
 
 ## Helper
 ```bash
@@ -25,7 +25,7 @@ Installed here:
 ./scripts/open-cad.sh dxf2pdf path/to/file.dxf
 ```
 
-## Excel (SheetSense Info Block export)
+## Excel (TDR Info Block export)
 - **LibreOffice Calc** is installed for `.xlsx` inspection:
   ```bash
   ./scripts/open-excel.sh path/to/file.xlsx          # open in Calc (GUI)

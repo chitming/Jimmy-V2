@@ -151,8 +151,8 @@ export function TeachPage() {
     <div className="app-shell">
       <header className="topbar">
         <div className="brand">
-          <Link to="/" className="brand-mark">
-            SHEET<span>SENSE</span>
+          <Link to="/" className="brand-mark" aria-label="Home">
+            T<span>DR</span>
           </Link>
           <div className="brand-sub">
             {page.filename} · page {page.page_index + 1}
@@ -212,7 +212,7 @@ export function TeachPage() {
 
           {!accepted && (
             <p className="help" style={{ marginTop: 12 }}>
-              Accept = you and the machine agree. SheetSense learns from that agreement and saves JPG
+              Accept = you and the machine agree. TDR learns from that agreement and saves JPG
               segments to the library.
             </p>
           )}

@@ -201,7 +201,7 @@ export function downloadInfoBlockExcel() {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = 'sheetsense_info_blocks.xlsx'
+    a.download = 'tdr_info_blocks.xlsx'
     a.click()
     URL.revokeObjectURL(url)
   })

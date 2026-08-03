@@ -1,4 +1,4 @@
-# SheetSense (Jimmy-V2)
+# TDR — Technical Drawing Reader (Jimmy-V2)
 
 Teachable layout software for technical drawings.
 
@@ -8,7 +8,7 @@ Teachable layout software for technical drawings.
 2. Teach only two regions:
    - **Information block** (title block / company info)
    - **Drawing canvas** (main geometry area)
-3. SheetSense learns from your teaching and suggests those regions on the next similar sheet
+3. TDR learns from your teaching and suggests those regions on the next similar sheet
 4. Every taught region is saved as a **JPG** into a segment library:
    - `backend/data/library/Info Block/`
    - `backend/data/library/Drawing/`
@@ -40,7 +40,7 @@ Open http://localhost:5173
 
 ## Segment library
 
-When you click **Save teaching**, SheetSense crops both boxes and stores:
+When you click **Accept**, TDR crops both boxes and stores:
 
 ```text
 backend/data/library/
@@ -58,7 +58,7 @@ On the Segment library page:
 
 1. Click **OCR Info Blocks**
 2. Text is stored as generic `Field1`, `Field2`, `Field3`, … (no assumed labels)
-3. Click **Download Excel** → `sheetsense_info_blocks.xlsx`
+3. Click **Download Excel** → `tdr_info_blocks.xlsx`
 
 On this VM, inspect Excel with LibreOffice Calc:
 ```bash
