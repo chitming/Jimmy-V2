@@ -40,17 +40,17 @@ export function HomePage() {
     <div className="app-shell">
       <header className="topbar">
         <div className="brand">
-          <div className="brand-mark">
+          <Link to="/" className="brand-mark" aria-label="Home">
             SHEET<span>SENSE</span>
-          </div>
+          </Link>
           <div className="brand-sub">Technical drawing layout teacher</div>
         </div>
         <div className="nav-actions">
           <Link className="btn btn-ghost" to="/library">
-            Segment library
+            Open Segment library
           </Link>
           <button className="btn btn-primary" disabled={busy} onClick={() => inputRef.current?.click()}>
-            {busy ? 'Uploading…' : 'Upload drawing'}
+            {busy ? 'Uploading…' : 'Upload Drawing'}
           </button>
           <input
             ref={inputRef}
@@ -77,11 +77,11 @@ export function HomePage() {
           </p>
           <div className="hero-cta">
             <button className="btn btn-primary" disabled={busy} onClick={() => inputRef.current?.click()}>
-              Start with a PDF or JPG
+              Upload Drawing
             </button>
-            <a className="btn btn-ghost" href="#library">
-              Open library
-            </a>
+            <Link className="btn btn-ghost" to="/library">
+              Open Segment library
+            </Link>
           </div>
         </div>
         <aside className="hero-panel">

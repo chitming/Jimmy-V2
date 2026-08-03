@@ -163,7 +163,7 @@ export function TeachPage() {
             Library
           </Link>
           <Link className="btn btn-ghost" to="/library">
-            Segments
+            Open Segment library
           </Link>
           <button className="btn btn-primary" disabled={!canAccept || busy || accepted} onClick={() => void onAccept()}>
             {accepted ? 'Accepted' : 'Accept'}
