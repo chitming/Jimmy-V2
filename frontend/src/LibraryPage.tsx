@@ -224,7 +224,7 @@ export function LibraryPage() {
         <h2>Sheet canvas · working space</h2>
         <p className="help">
           Put Stream A + Stream B results back onto one <strong>A3 landscape</strong> sheet
-          (horizontal by default). Open the working canvas to move items and edit text.
+          (horizontal by default). Drawing on top; Working space as a table along the bottom.
           More tools come later.
         </p>
         <div className="nav-actions" style={{ marginTop: 14 }}>

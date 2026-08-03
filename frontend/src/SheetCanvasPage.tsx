@@ -15,6 +15,12 @@ type DragState = {
   origY: number
 }
 
+function sourceLabel(el: SheetElement) {
+  if (el.source === 'stream_a') return 'Stream A'
+  if (el.source === 'stream_b') return 'Stream B'
+  return el.type
+}
+
 export function SheetCanvasPage() {
   const { sheetId = '' } = useParams()
   const [sheet, setSheet] = useState<SheetCanvas | null>(null)
@@ -46,6 +52,14 @@ export function SheetCanvasPage() {
 
   const paper = sheet?.paper
   const isLandscape = (paper?.orientation || 'landscape') === 'landscape'
+  const tableRows = useMemo(
+    () => elements.filter((el) => el.type !== 'drawing'),
+    [elements],
+  )
+  const drawingEl = useMemo(
+    () => elements.find((el) => el.type === 'drawing') ?? null,
+    [elements],
+  )
 
   function updateElement(id: string, patch: Partial<SheetElement>) {
     setElements((prev) => prev.map((el) => (el.id === id ? { ...el, ...patch } : el)))
@@ -162,36 +176,7 @@ export function SheetCanvasPage() {
         </div>
       </header>
 
-      <div className="sheet-workspace">
-        <aside className="panel sheet-tools">
-          <h2>Working space</h2>
-          <p className="help">
-            Stream A (Info Block) and Stream B (Drawing) are placed on one A3 sheet
-            (landscape by default). Drag items to move. Edit text on the right.
-            More tools will be added later.
-          </p>
-          <div className="status-banner">
-            {paper.width_mm} × {paper.height_mm} mm · {elements.length} item
-            {elements.length === 1 ? '' : 's'}
-          </div>
-          <div className="field-list" style={{ marginTop: 12 }}>
-            {elements.map((el) => (
-              <button
-                key={el.id}
-                className={`ocr-item${selectedId === el.id ? ' active' : ''}`}
-                onClick={() => setSelectedId(el.id)}
-              >
-                <strong>{el.label || el.type}</strong>
-                <span>{el.source === 'stream_a' ? 'Stream A' : el.source === 'stream_b' ? 'Stream B' : el.type}</span>
-              </button>
-            ))}
-          </div>
-          <div className="tool-placeholder">
-            <h3>Tools</h3>
-            <p className="help">Coming next: snap, align, measure, export PDF.</p>
-          </div>
-        </aside>
-
+      <div className="sheet-workspace sheet-workspace-stacked">
         <div className="sheet-stage-wrap">
           <div
             ref={paperRef}
@@ -222,7 +207,12 @@ export function SheetCanvasPage() {
                   <img src={el.image_url} alt={el.label || 'Drawing'} draggable={false} />
                 ) : null}
                 {(el.type === 'text' || el.type === 'label') && (
-                  <div className="sheet-el-text">{el.text || ''}</div>
+                  <div className="sheet-el-text">
+                    {el.type === 'text' && el.label ? (
+                      <strong className="sheet-el-fieldkey">{el.label}</strong>
+                    ) : null}
+                    {el.text || ''}
+                  </div>
                 )}
               </div>
             ))}
@@ -232,58 +222,80 @@ export function SheetCanvasPage() {
               Flip to A3 {isLandscape ? 'portrait' : 'landscape'}
             </button>
           </div>
-          <p className="help sheet-caption">{sheet.title}</p>
+          <p className="help sheet-caption">
+            {sheet.title} · {paper.width_mm} × {paper.height_mm} mm
+            {drawingEl?.dxf_url ? ' · Stream B DXF linked' : ''}
+          </p>
         </div>
 
-        <aside className="panel">
-          <h2>Edit selected</h2>
-          {!selected && <p className="help">Select an item on the sheet to edit.</p>}
-          {selected && (
-            <>
-              <label className="help" htmlFor="sheet-el-label">
-                Label
-              </label>
-              <input
-                id="sheet-el-label"
-                className="sheet-input"
-                value={selected.label || ''}
-                onChange={(e) => updateElement(selected.id, { label: e.target.value })}
-              />
-              {(selected.type === 'text' || selected.type === 'label') && (
-                <>
-                  <label className="help" htmlFor="sheet-el-text" style={{ marginTop: 12 }}>
-                    Text
-                  </label>
-                  <textarea
-                    id="sheet-el-text"
-                    className="ocr-edit"
-                    value={selected.text || ''}
-                    onChange={(e) => updateElement(selected.id, { text: e.target.value })}
-                  />
-                </>
-              )}
-              {selected.type === 'drawing' && selected.dxf_url && (
-                <p className="help" style={{ marginTop: 12 }}>
-                  Linked DXF available from Stream B.
-                </p>
-              )}
-              <div className="field-list" style={{ marginTop: 12 }}>
-                <div className="field">
-                  <label>Position</label>
-                  <div>
-                    x {(selected.x * 100).toFixed(1)}% · y {(selected.y * 100).toFixed(1)}%
-                  </div>
-                </div>
-                <div className="field">
-                  <label>Size</label>
-                  <div>
-                    w {(selected.w * 100).toFixed(1)}% · h {(selected.h * 100).toFixed(1)}%
-                  </div>
-                </div>
-              </div>
-            </>
+        <section className="panel sheet-worktable-panel">
+          <div className="section-head" style={{ marginTop: 0 }}>
+            <div>
+              <h2>Working space</h2>
+              <p>
+                Table under the drawing canvas. Edit Stream A fields here; more tools later.
+              </p>
+            </div>
+          </div>
+          <div className="table-wrap">
+            <table className="data-table sheet-worktable">
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Source</th>
+                  <th>Label</th>
+                  <th>Text</th>
+                  <th>Position</th>
+                </tr>
+              </thead>
+              <tbody>
+                {tableRows.map((el) => (
+                  <tr
+                    key={el.id}
+                    className={selectedId === el.id ? 'active-row' : undefined}
+                    onClick={() => setSelectedId(el.id)}
+                  >
+                    <td>{el.type}</td>
+                    <td>{sourceLabel(el)}</td>
+                    <td>
+                      <input
+                        className="sheet-input"
+                        value={el.label || ''}
+                        onChange={(e) => updateElement(el.id, { label: e.target.value })}
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    </td>
+                    <td>
+                      <input
+                        className="sheet-input"
+                        value={el.text || ''}
+                        onChange={(e) => updateElement(el.id, { text: e.target.value })}
+                        onClick={(e) => e.stopPropagation()}
+                        disabled={el.type === 'drawing'}
+                      />
+                    </td>
+                    <td className="sheet-pos-cell">
+                      {(el.x * 100).toFixed(0)}%,{(el.y * 100).toFixed(0)}%
+                    </td>
+                  </tr>
+                ))}
+                {tableRows.length === 0 && (
+                  <tr>
+                    <td colSpan={5}>No working-space rows yet. Compose Stream A + B first.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          {selected?.type === 'drawing' && (
+            <p className="help" style={{ marginTop: 10 }}>
+              Drawing selected on canvas. Stream B preview sits above this table.
+            </p>
           )}
-        </aside>
+          <p className="help" style={{ marginTop: 10 }}>
+            Tools coming next: snap, align, measure, export PDF.
+          </p>
+        </section>
       </div>
 
       {(message || error) && (

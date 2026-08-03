@@ -20,10 +20,12 @@ def _default_elements(
     info_row: dict | None,
     drawing_run: dict | None,
 ) -> list[dict]:
-    """Place Stream A (info) + Stream B (drawing) onto one A3 landscape sheet."""
+    """Place Stream B drawing on top and Stream A info as a bottom table strip."""
     elements: list[dict] = []
 
-    # Main drawing area (left ~72% of the sheet).
+    has_info = bool(info_row)
+    # Drawing fills most of the sheet; leave a bottom band for the info table.
+    drawing_h = 0.72 if has_info else 0.90
     if drawing_run:
         image_url = drawing_run.get("preview_url") or drawing_run.get("image_url")
         elements.append(
@@ -36,14 +38,14 @@ def _default_elements(
                 "image_url": image_url,
                 "dxf_url": drawing_run.get("dxf_url"),
                 "x": 0.03,
-                "y": 0.05,
-                "w": 0.70,
-                "h": 0.90,
+                "y": 0.03,
+                "w": 0.94,
+                "h": drawing_h,
                 "locked": False,
             }
         )
 
-    # Info Block title strip (right side) — Stream A fields as editable text.
+    # Info Block as a horizontal table along the bottom of the drawing canvas.
     if info_row:
         fields = info_row.get("fields") or {}
         field_items = sorted(
@@ -53,8 +55,14 @@ def _default_elements(
         if not field_items and info_row.get("raw_text"):
             field_items = [("Field1", str(info_row["raw_text"])[:240])]
 
-        panel_x, panel_y, panel_w = 0.76, 0.05, 0.21
-        header_h = 0.07
+        table_y = 0.78
+        table_h = 0.18
+        label_h = 0.045
+        cell_y = table_y + label_h
+        cell_h = table_h - label_h - 0.01
+        n = max(len(field_items), 1)
+        cell_w = 0.94 / n
+
         elements.append(
             {
                 "id": "el_info_header",
@@ -62,15 +70,14 @@ def _default_elements(
                 "source": "stream_a",
                 "page_id": page_id,
                 "label": "Info Block",
-                "text": "INFO BLOCK",
-                "x": panel_x,
-                "y": panel_y,
-                "w": panel_w,
-                "h": header_h,
+                "text": "INFO BLOCK / WORKING SPACE",
+                "x": 0.03,
+                "y": table_y,
+                "w": 0.94,
+                "h": label_h,
                 "locked": False,
             }
         )
-        row_h = min(0.10, max(0.05, (0.90 - header_h) / max(len(field_items), 1)))
         for index, (key, value) in enumerate(field_items):
             elements.append(
                 {
@@ -81,10 +88,10 @@ def _default_elements(
                     "label": key,
                     "field_key": key,
                     "text": str(value),
-                    "x": panel_x,
-                    "y": panel_y + header_h + index * row_h,
-                    "w": panel_w,
-                    "h": row_h * 0.92,
+                    "x": 0.03 + index * cell_w,
+                    "y": cell_y,
+                    "w": cell_w * 0.98,
+                    "h": cell_h,
                     "locked": False,
                 }
             )

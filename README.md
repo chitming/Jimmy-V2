@@ -94,8 +94,8 @@ Optional: place a fine-tuned weights file at `backend/data/models/aec_symbols.pt
 After Stream A and Stream B:
 
 1. Click **Compose A3 sheet canvas**
-2. Stream A (Info Block fields) + Stream B (Drawing preview) are placed on one **A3 landscape** sheet
-3. Open the working canvas to drag items and edit text (more tools later)
+2. Stream B drawing sits on top of an **A3 landscape** sheet; Stream A fields form a **table along the bottom**
+3. Open the working canvas to edit the bottom table / drag items (more tools later)
 
 ## How learning works (v1)
 

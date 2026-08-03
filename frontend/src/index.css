@@ -714,16 +714,9 @@ code {
   align-items: start;
 }
 
-.sheet-tools .tool-placeholder {
-  margin-top: 18px;
-  padding-top: 14px;
-  border-top: 1px solid var(--line);
-}
-
-.sheet-tools .tool-placeholder h3 {
-  margin: 0 0 6px;
-  font-family: var(--font-display);
-  font-size: 1rem;
+.sheet-workspace-stacked {
+  grid-template-columns: 1fr;
+  gap: 16px;
 }
 
 .sheet-stage-wrap {
@@ -731,6 +724,35 @@ code {
   flex-direction: column;
   align-items: center;
   gap: 10px;
+}
+
+.sheet-worktable-panel {
+  width: 100%;
+}
+
+.sheet-worktable td {
+  vertical-align: middle;
+}
+
+.sheet-worktable .sheet-input {
+  min-width: 8rem;
+}
+
+.sheet-worktable .sheet-pos-cell {
+  white-space: nowrap;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.sheet-worktable tr.active-row td {
+  background: rgba(46, 196, 182, 0.12);
+}
+
+.sheet-el-fieldkey {
+  display: block;
+  font-size: 0.85em;
+  opacity: 0.75;
+  margin-bottom: 2px;
 }
 
 .sheet-paper {
