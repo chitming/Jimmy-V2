@@ -60,6 +60,12 @@ On the Segment library page:
 2. Text is stored as generic `Field1`, `Field2`, `Field3`, … (no assumed labels)
 3. Click **Download Excel** → `sheetsense_info_blocks.xlsx`
 
+On this VM, inspect Excel with LibreOffice Calc:
+```bash
+./scripts/open-excel.sh export-latest              # build + open latest export
+./scripts/open-excel.sh inspect path/to/file.xlsx  # terminal preview
+```
+
 ## Stream B — Drawing pipeline → DXF
 
 One Drawing image runs one loop and exports one DXF:
