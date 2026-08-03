@@ -747,12 +747,20 @@ code {
 }
 
 .sheet-paper.landscape {
-  aspect-ratio: 297 / 210;
+  aspect-ratio: 420 / 297;
 }
 
 .sheet-paper.portrait {
-  aspect-ratio: 210 / 297;
+  aspect-ratio: 297 / 420;
   max-width: 520px;
+}
+
+.sheet-flip-bar {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  max-width: 720px;
+  margin-top: 2px;
 }
 
 .sheet-margin-guide {

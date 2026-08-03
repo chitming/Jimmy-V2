@@ -114,7 +114,7 @@ export function SheetCanvasPage() {
       })
       setSheet(saved)
       setElements(saved.elements)
-      setMessage(`Paper set to A4 ${next}.`)
+      setMessage(`Paper set to A3 ${next}.`)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Orientation change failed')
     } finally {
@@ -150,15 +150,12 @@ export function SheetCanvasPage() {
           <Link to="/" className="brand-mark" aria-label="Home">
             T<span>DR</span>
           </Link>
-          <div className="brand-sub">Sheet canvas · A4 {paper.orientation}</div>
+          <div className="brand-sub">Sheet canvas · A3 {paper.orientation}</div>
         </div>
         <div className="nav-actions">
           <Link className="btn btn-ghost" to="/library">
             Open Segment library
           </Link>
-          <button className="btn" disabled={busy} onClick={() => void onToggleOrientation()}>
-            Flip to A4 {isLandscape ? 'portrait' : 'landscape'}
-          </button>
           <button className="btn btn-primary" disabled={busy} onClick={() => void onSave()}>
             Save sheet
           </button>
@@ -169,8 +166,8 @@ export function SheetCanvasPage() {
         <aside className="panel sheet-tools">
           <h2>Working space</h2>
           <p className="help">
-            Stream A (Info Block) and Stream B (Drawing) are placed on one A4 sheet
-            (horizontal by default). Drag items to move. Edit text on the right.
+            Stream A (Info Block) and Stream B (Drawing) are placed on one A3 sheet
+            (landscape by default). Drag items to move. Edit text on the right.
             More tools will be added later.
           </p>
           <div className="status-banner">
@@ -229,6 +226,11 @@ export function SheetCanvasPage() {
                 )}
               </div>
             ))}
+          </div>
+          <div className="sheet-flip-bar">
+            <button className="btn" disabled={busy} onClick={() => void onToggleOrientation()}>
+              Flip to A3 {isLandscape ? 'portrait' : 'landscape'}
+            </button>
           </div>
           <p className="help sheet-caption">{sheet.title}</p>
         </div>

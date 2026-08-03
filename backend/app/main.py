@@ -204,10 +204,10 @@ def get_sheet_canvas_list() -> dict:
     return {
         "count": len(sheets),
         "paper_default": {
-            "size": "A4",
+            "size": "A3",
             "orientation": "landscape",
-            "width_mm": 297.0,
-            "height_mm": 210.0,
+            "width_mm": 420.0,
+            "height_mm": 297.0,
         },
         "sheets": sheets,
     }

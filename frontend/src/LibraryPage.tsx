@@ -127,7 +127,7 @@ export function LibraryPage() {
       const result = await composeSheetCanvas(undefined, 'landscape')
       setSheets(result.all_sheets)
       setMessage(
-        `Sheet canvas ready: ${result.processed} A4 landscape sheet${result.processed === 1 ? '' : 's'}.`,
+        `Sheet canvas ready: ${result.processed} A3 landscape sheet${result.processed === 1 ? '' : 's'}.`,
       )
       if (result.sheets[0]) {
         navigate(result.sheets[0].edit_url)
@@ -223,7 +223,7 @@ export function LibraryPage() {
       <section className="panel" style={{ marginBottom: 22 }}>
         <h2>Sheet canvas · working space</h2>
         <p className="help">
-          Put Stream A + Stream B results back onto one <strong>A4 landscape</strong> sheet
+          Put Stream A + Stream B results back onto one <strong>A3 landscape</strong> sheet
           (horizontal by default). Open the working canvas to move items and edit text.
           More tools come later.
         </p>
@@ -233,7 +233,7 @@ export function LibraryPage() {
             disabled={busy || (rows.length === 0 && drawingRuns.length === 0)}
             onClick={() => void onComposeSheet()}
           >
-            {busy ? 'Composing…' : 'Compose A4 sheet canvas'}
+            {busy ? 'Composing…' : 'Compose A3 sheet canvas'}
           </button>
         </div>
         {sheets.length > 0 && (
@@ -241,7 +241,7 @@ export function LibraryPage() {
             {sheets.map((sheet) => (
               <div className="field" key={sheet.id}>
                 <label>
-                  {sheet.title} · A4 {sheet.paper.orientation} · {sheet.elements.length} items
+                  {sheet.title} · A3 {sheet.paper.orientation} · {sheet.elements.length} items
                 </label>
                 <div>
                   <Link to={sheet.edit_url}>Open working canvas</Link>

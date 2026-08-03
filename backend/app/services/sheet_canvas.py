@@ -4,9 +4,14 @@ from ..db import connect, dumps, loads, new_id, utc_now
 from .drawing_ocr import get_drawing_ocr_run
 from .info_block_excel import list_info_block_rows
 
-# ISO A4 in millimetres. Default orientation is landscape (horizontal).
-A4_PORTRAIT_MM = (210.0, 297.0)
-A4_LANDSCAPE_MM = (297.0, 210.0)
+# ISO A3 in millimetres. Default orientation is landscape (horizontal).
+A3_PORTRAIT_MM = (297.0, 420.0)
+A3_LANDSCAPE_MM = (420.0, 297.0)
+PAPER_SIZE = "A3"
+
+
+def _paper_mm(orientation: str) -> tuple[float, float]:
+    return A3_LANDSCAPE_MM if orientation == "landscape" else A3_PORTRAIT_MM
 
 
 def _default_elements(
@@ -15,7 +20,7 @@ def _default_elements(
     info_row: dict | None,
     drawing_run: dict | None,
 ) -> list[dict]:
-    """Place Stream A (info) + Stream B (drawing) onto one A4 landscape sheet."""
+    """Place Stream A (info) + Stream B (drawing) onto one A3 landscape sheet."""
     elements: list[dict] = []
 
     # Main drawing area (left ~72% of the sheet).
@@ -125,7 +130,7 @@ def compose_sheet_canvas(
     *,
     orientation: str = "landscape",
 ) -> dict:
-    """Compose Stream A + Stream B results onto one A4 sheet (landscape default)."""
+    """Compose Stream A + Stream B results onto one A3 sheet (landscape default)."""
     if orientation not in {"landscape", "portrait"}:
         raise ValueError("orientation must be landscape or portrait")
 
@@ -139,10 +144,8 @@ def compose_sheet_canvas(
     info_by_page = {row["page_id"]: row for row in info_rows}
     candidate_ids = sorted(set(info_by_page) | set(drawing_runs_by_page))
     if page_id:
-        if page_id not in candidate_ids and page_id not in info_by_page and page_id not in drawing_runs_by_page:
-            # Still allow if either stream exists for that page.
-            if page_id not in info_by_page and get_drawing_ocr_run(page_id) is None:
-                raise KeyError(f"No Stream A or Stream B result for page {page_id}")
+        if page_id not in info_by_page and get_drawing_ocr_run(page_id) is None:
+            raise KeyError(f"No Stream A or Stream B result for page {page_id}")
         target_ids = [page_id]
     else:
         if not candidate_ids:
@@ -151,7 +154,7 @@ def compose_sheet_canvas(
 
     composed = []
     now = utc_now()
-    width_mm, height_mm = A4_LANDSCAPE_MM if orientation == "landscape" else A4_PORTRAIT_MM
+    width_mm, height_mm = _paper_mm(orientation)
 
     for pid in target_ids:
         info_row = info_by_page.get(pid)
@@ -164,10 +167,10 @@ def compose_sheet_canvas(
             title_bits.append(info_row.get("source_filename") or pid)
         elif drawing_run:
             title_bits.append(drawing_run.get("source_filename") or pid)
-        title = f"A4 sheet · {title_bits[0]}"
+        title = f"A3 sheet · {title_bits[0]}"
 
         paper = {
-            "size": "A4",
+            "size": PAPER_SIZE,
             "orientation": orientation,
             "width_mm": width_mm,
             "height_mm": height_mm,
@@ -208,10 +211,10 @@ def compose_sheet_canvas(
 
     return {
         "paper_default": {
-            "size": "A4",
+            "size": PAPER_SIZE,
             "orientation": "landscape",
-            "width_mm": A4_LANDSCAPE_MM[0],
-            "height_mm": A4_LANDSCAPE_MM[1],
+            "width_mm": A3_LANDSCAPE_MM[0],
+            "height_mm": A3_LANDSCAPE_MM[1],
         },
         "processed": len(composed),
         "sheets": composed,
@@ -232,13 +235,12 @@ def update_sheet_canvas(
         raise KeyError("Sheet canvas not found")
 
     paper = dict(sheet["paper"])
+    paper["size"] = PAPER_SIZE
     if orientation is not None:
         if orientation not in {"landscape", "portrait"}:
             raise ValueError("orientation must be landscape or portrait")
         paper["orientation"] = orientation
-        paper["width_mm"], paper["height_mm"] = (
-            A4_LANDSCAPE_MM if orientation == "landscape" else A4_PORTRAIT_MM
-        )
+        paper["width_mm"], paper["height_mm"] = _paper_mm(orientation)
 
     next_elements = elements if elements is not None else sheet["elements"]
     next_title = title if title is not None else sheet["title"]
