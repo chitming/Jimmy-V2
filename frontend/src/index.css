@@ -73,23 +73,24 @@ button {
 .app-shell {
   position: relative;
   z-index: 1;
-  max-width: 1280px;
+  max-width: 960px;
   margin: 0 auto;
-  padding: 28px 24px 64px;
+  padding: 20px 18px 48px;
 }
 
 .topbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 36px;
+  gap: 12px;
+  margin-bottom: 22px;
 }
 
 .brand {
   display: flex;
   align-items: baseline;
-  gap: 10px;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .brand-mark {
@@ -154,20 +155,20 @@ button {
 
 .hero {
   display: grid;
-  grid-template-columns: 1.15fr 0.85fr;
-  gap: 28px;
+  grid-template-columns: 1.1fr 0.9fr;
+  gap: 16px;
   align-items: end;
-  min-height: min(72vh, 640px);
-  margin-bottom: 48px;
+  min-height: auto;
+  margin-bottom: 28px;
 }
 
 .hero-copy h1 {
   font-family: var(--font-display);
   font-weight: 800;
-  font-size: clamp(2.8rem, 7vw, 5.2rem);
+  font-size: clamp(2.4rem, 5.5vw, 3.8rem);
   line-height: 0.95;
   letter-spacing: -0.03em;
-  margin: 0 0 18px;
+  margin: 0 0 10px;
 }
 
 .hero-copy h1 em {
@@ -186,16 +187,16 @@ button {
 }
 
 .hero-copy p {
-  max-width: 34rem;
+  max-width: 28rem;
   color: var(--muted);
-  font-size: 1.08rem;
-  line-height: 1.55;
-  margin: 0 0 28px;
+  font-size: 1rem;
+  line-height: 1.5;
+  margin: 0 0 18px;
 }
 
 .hero-cta {
   display: flex;
-  gap: 12px;
+  gap: 10px;
   flex-wrap: wrap;
 }
 
@@ -245,8 +246,8 @@ button {
   display: flex;
   justify-content: space-between;
   align-items: end;
-  gap: 16px;
-  margin: 8px 0 18px;
+  gap: 12px;
+  margin: 4px 0 12px;
 }
 
 .section-head h2 {
@@ -262,8 +263,8 @@ button {
 
 .drawing-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
 }
 
 .drawing-card {
