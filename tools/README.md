@@ -24,3 +24,12 @@ Installed here:
 ./scripts/open-cad.sh dxf path/to/file.dxf
 ./scripts/open-cad.sh dxf2pdf path/to/file.dxf
 ```
+
+## Excel (SheetSense Info Block export)
+- **LibreOffice Calc** is installed for `.xlsx` inspection:
+  ```bash
+  ./scripts/open-excel.sh path/to/file.xlsx          # open in Calc (GUI)
+  ./scripts/open-excel.sh inspect path/to/file.xlsx  # terminal preview
+  ./scripts/open-excel.sh html path/to/file.xlsx     # convert to HTML
+  ./scripts/open-excel.sh export-latest              # build + open latest Info Block Excel
+  ```
