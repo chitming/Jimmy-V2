@@ -1,42 +1,49 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import {
+  composeSheetCanvas,
   downloadDrawingDxf,
   downloadInfoBlockExcel,
   getInfoBlockRows,
   getLibrary,
   listDrawingOcrRuns,
+  listSheetCanvases,
   runDrawingOcr,
   runInfoBlockOcr,
   type DrawingOcrRun,
   type InfoBlockRow,
   type LibraryItem,
+  type SheetCanvas,
 } from './api'
 
 type Filter = 'all' | 'info_block' | 'drawing'
 
 export function LibraryPage() {
+  const navigate = useNavigate()
   const [items, setItems] = useState<LibraryItem[]>([])
   const [counts, setCounts] = useState({ info_block: 0, drawing: 0 })
   const [filter, setFilter] = useState<Filter>('all')
   const [rows, setRows] = useState<InfoBlockRow[]>([])
   const [fieldHeaders, setFieldHeaders] = useState<string[]>([])
   const [drawingRuns, setDrawingRuns] = useState<DrawingOcrRun[]>([])
+  const [sheets, setSheets] = useState<SheetCanvas[]>([])
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   async function refresh() {
-    const [library, info, drawings] = await Promise.all([
+    const [library, info, drawings, canvas] = await Promise.all([
       getLibrary(),
       getInfoBlockRows(),
       listDrawingOcrRuns(),
+      listSheetCanvases(),
     ])
     setItems(library.items)
     setCounts(library.counts)
     setRows(info.rows)
     setFieldHeaders(info.field_headers)
     setDrawingRuns(drawings.runs)
+    setSheets(canvas.sheets)
   }
 
   useEffect(() => {
@@ -107,6 +114,26 @@ export function LibraryPage() {
       setMessage(`DXF downloaded: ${pageId}.dxf`)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'DXF download failed')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function onComposeSheet() {
+    setBusy(true)
+    setError(null)
+    setMessage(null)
+    try {
+      const result = await composeSheetCanvas(undefined, 'landscape')
+      setSheets(result.all_sheets)
+      setMessage(
+        `Sheet canvas ready: ${result.processed} A4 landscape sheet${result.processed === 1 ? '' : 's'}.`,
+      )
+      if (result.sheets[0]) {
+        navigate(result.sheets[0].edit_url)
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Sheet compose failed')
     } finally {
       setBusy(false)
     }
@@ -186,6 +213,38 @@ export function LibraryPage() {
                       Download DXF
                     </button>
                   ) : null}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="panel" style={{ marginBottom: 22 }}>
+        <h2>Sheet canvas · working space</h2>
+        <p className="help">
+          Put Stream A + Stream B results back onto one <strong>A4 landscape</strong> sheet
+          (horizontal by default). Open the working canvas to move items and edit text.
+          More tools come later.
+        </p>
+        <div className="nav-actions" style={{ marginTop: 14 }}>
+          <button
+            className="btn btn-primary"
+            disabled={busy || (rows.length === 0 && drawingRuns.length === 0)}
+            onClick={() => void onComposeSheet()}
+          >
+            {busy ? 'Composing…' : 'Compose A4 sheet canvas'}
+          </button>
+        </div>
+        {sheets.length > 0 && (
+          <div className="field-list" style={{ marginTop: 14 }}>
+            {sheets.map((sheet) => (
+              <div className="field" key={sheet.id}>
+                <label>
+                  {sheet.title} · A4 {sheet.paper.orientation} · {sheet.elements.length} items
+                </label>
+                <div>
+                  <Link to={sheet.edit_url}>Open working canvas</Link>
                 </div>
               </div>
             ))}

@@ -89,6 +89,14 @@ Export to DXF
 
 Optional: place a fine-tuned weights file at `backend/data/models/aec_symbols.pt` to replace YOLO-World open-vocab detection.
 
+## Sheet canvas — working space
+
+After Stream A and Stream B:
+
+1. Click **Compose A4 sheet canvas**
+2. Stream A (Info Block fields) + Stream B (Drawing preview) are placed on one **A4 landscape** sheet
+3. Open the working canvas to drag items and edit text (more tools later)
+
 ## How learning works (v1)
 
 No cloud vision account required for the first version.

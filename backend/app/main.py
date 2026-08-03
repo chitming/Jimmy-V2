@@ -33,6 +33,12 @@ from .services.info_block_excel import (
     list_info_block_rows,
     ocr_all_info_blocks,
 )
+from .services.sheet_canvas import (
+    compose_sheet_canvas,
+    get_sheet_canvas,
+    list_sheet_canvases,
+    update_sheet_canvas,
+)
 from .services.layout import compute_phash, labeled_count, predict_layout
 from .services.library import get_segment_path, library_counts, list_library, save_page_segments
 from .services.ocr import extract_information_block
@@ -64,6 +70,13 @@ class Box(BaseModel):
 class AnnotationPayload(BaseModel):
     information_block: Box
     drawing_canvas: Box
+
+
+class SheetCanvasUpdatePayload(BaseModel):
+    elements: list[dict] | None = None
+    title: str | None = None
+    orientation: str | None = None
+    status: str | None = None
 
 
 @app.on_event("startup")
@@ -183,6 +196,61 @@ def export_drawing_dxf(page_id: str):
         media_type="application/dxf",
         filename=f"{page_id}.dxf",
     )
+
+
+@app.get("/api/sheet-canvas")
+def get_sheet_canvas_list() -> dict:
+    sheets = list_sheet_canvases()
+    return {
+        "count": len(sheets),
+        "paper_default": {
+            "size": "A4",
+            "orientation": "landscape",
+            "width_mm": 297.0,
+            "height_mm": 210.0,
+        },
+        "sheets": sheets,
+    }
+
+
+@app.post("/api/sheet-canvas/compose")
+def post_compose_sheet_canvas(
+    page_id: str | None = None,
+    orientation: str = "landscape",
+) -> dict:
+    try:
+        result = compose_sheet_canvas(page_id=page_id, orientation=orientation)
+    except KeyError as exc:
+        raise HTTPException(400, str(exc)) from None
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from None
+    if result["processed"] == 0:
+        raise HTTPException(400, "Nothing to compose. Run Stream A and/or Stream B first.")
+    return result
+
+
+@app.get("/api/sheet-canvas/{sheet_id}")
+def get_one_sheet_canvas(sheet_id: str) -> dict:
+    sheet = get_sheet_canvas(sheet_id)
+    if sheet is None:
+        raise HTTPException(404, "Sheet canvas not found")
+    return sheet
+
+
+@app.put("/api/sheet-canvas/{sheet_id}")
+def put_sheet_canvas(sheet_id: str, payload: SheetCanvasUpdatePayload) -> dict:
+    try:
+        return update_sheet_canvas(
+            sheet_id,
+            elements=payload.elements,
+            title=payload.title,
+            orientation=payload.orientation,
+            status=payload.status,
+        )
+    except KeyError:
+        raise HTTPException(404, "Sheet canvas not found") from None
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from None
 
 
 @app.post("/api/drawings/upload")

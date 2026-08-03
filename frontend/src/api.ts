@@ -293,3 +293,78 @@ export function downloadDrawingDxf(pageId: string) {
     URL.revokeObjectURL(url)
   })
 }
+
+export type SheetElement = {
+  id: string
+  type: 'drawing' | 'text' | 'label' | string
+  source?: string
+  page_id?: string
+  label?: string
+  field_key?: string
+  text?: string
+  image_url?: string | null
+  dxf_url?: string | null
+  x: number
+  y: number
+  w: number
+  h: number
+  locked?: boolean
+}
+
+export type SheetCanvas = {
+  id: string
+  page_id: string
+  title: string
+  paper: {
+    size: string
+    orientation: 'landscape' | 'portrait' | string
+    width_mm: number
+    height_mm: number
+    unit?: string
+  }
+  elements: SheetElement[]
+  status: string
+  created_at: string
+  updated_at: string
+  edit_url: string
+}
+
+export function listSheetCanvases() {
+  return request<{
+    count: number
+    paper_default: SheetCanvas['paper']
+    sheets: SheetCanvas[]
+  }>('/api/sheet-canvas')
+}
+
+export function composeSheetCanvas(pageId?: string, orientation = 'landscape') {
+  const params = new URLSearchParams()
+  if (pageId) params.set('page_id', pageId)
+  params.set('orientation', orientation)
+  return request<{
+    paper_default: SheetCanvas['paper']
+    processed: number
+    sheets: SheetCanvas[]
+    all_sheets: SheetCanvas[]
+  }>(`/api/sheet-canvas/compose?${params.toString()}`, { method: 'POST' })
+}
+
+export function getSheetCanvas(sheetId: string) {
+  return request<SheetCanvas>(`/api/sheet-canvas/${sheetId}`)
+}
+
+export function saveSheetCanvas(
+  sheetId: string,
+  payload: {
+    elements?: SheetElement[]
+    title?: string
+    orientation?: string
+    status?: string
+  },
+) {
+  return request<SheetCanvas>(`/api/sheet-canvas/${sheetId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+}

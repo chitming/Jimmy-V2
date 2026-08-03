@@ -150,6 +150,18 @@ def init_db() -> None:
                 FOREIGN KEY(segment_id) REFERENCES segments(id),
                 FOREIGN KEY(page_id) REFERENCES pages(id)
             );
+
+            CREATE TABLE IF NOT EXISTS sheet_canvases (
+                id TEXT PRIMARY KEY,
+                page_id TEXT NOT NULL UNIQUE,
+                title TEXT NOT NULL,
+                paper_json TEXT NOT NULL,
+                elements_json TEXT NOT NULL,
+                status TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY(page_id) REFERENCES pages(id)
+            );
             """
         )
         _ensure_column(conn, "drawing_ocr_runs", "vectors_json", "TEXT")

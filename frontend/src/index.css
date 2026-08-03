@@ -213,7 +213,7 @@ button {
       rgba(46, 196, 182, 0.04) 11px
     );
   box-shadow: var(--shadow);
-  padding: 22px;
+  padding: 14px;
   animation: rise-in 700ms ease both;
 }
 
@@ -703,9 +703,135 @@ code {
   }
 }
 
+.sheet-shell {
+  max-width: 1180px;
+}
+
+.sheet-workspace {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr) 220px;
+  gap: 12px;
+  align-items: start;
+}
+
+.sheet-tools .tool-placeholder {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.sheet-tools .tool-placeholder h3 {
+  margin: 0 0 6px;
+  font-family: var(--font-display);
+  font-size: 1rem;
+}
+
+.sheet-stage-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.sheet-paper {
+  position: relative;
+  width: 100%;
+  max-width: 720px;
+  background: #f4f7f8;
+  color: #122028;
+  border: 1px solid rgba(140, 196, 214, 0.35);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  touch-action: none;
+  user-select: none;
+}
+
+.sheet-paper.landscape {
+  aspect-ratio: 297 / 210;
+}
+
+.sheet-paper.portrait {
+  aspect-ratio: 210 / 297;
+  max-width: 520px;
+}
+
+.sheet-margin-guide {
+  position: absolute;
+  inset: 3%;
+  border: 1px dashed rgba(18, 32, 40, 0.18);
+  pointer-events: none;
+}
+
+.sheet-el {
+  position: absolute;
+  border: 1px solid transparent;
+  background: rgba(255, 255, 255, 0.55);
+  overflow: hidden;
+  cursor: grab;
+}
+
+.sheet-el.active {
+  border-color: #2ec4b6;
+  box-shadow: 0 0 0 1px rgba(46, 196, 182, 0.45);
+  z-index: 2;
+}
+
+.sheet-el-drawing {
+  background: #fff;
+  padding: 2px;
+}
+
+.sheet-el-drawing img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+  pointer-events: none;
+}
+
+.sheet-el-text,
+.sheet-el-label .sheet-el-text {
+  width: 100%;
+  height: 100%;
+  padding: 4px 6px;
+  font-size: clamp(0.55rem, 1.1vw, 0.78rem);
+  line-height: 1.25;
+  overflow: hidden;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.sheet-el-label {
+  background: rgba(18, 48, 65, 0.9);
+  color: #e8f2f6;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+}
+
+.sheet-el-label .sheet-el-text {
+  display: flex;
+  align-items: center;
+}
+
+.sheet-caption {
+  margin: 0;
+  text-align: center;
+}
+
+.sheet-input {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(7, 19, 26, 0.65);
+  color: var(--ink);
+  padding: 8px 10px;
+  font: inherit;
+}
+
 @media (max-width: 980px) {
   .hero,
-  .workspace {
+  .workspace,
+  .sheet-workspace {
     grid-template-columns: 1fr;
   }
 
