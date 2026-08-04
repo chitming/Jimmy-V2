@@ -170,6 +170,7 @@ def init_db() -> None:
         _ensure_column(conn, "drawing_ocr_runs", "cleaned_path", "TEXT")
         _ensure_column(conn, "drawing_ocr_runs", "preview_path", "TEXT")
         _ensure_column(conn, "drawing_ocr_runs", "dxf_path", "TEXT")
+        _ensure_column(conn, "info_block_rows", "layout_json", "TEXT")
 
 
 def _ensure_column(conn: sqlite3.Connection, table: str, column: str, decl: str) -> None:

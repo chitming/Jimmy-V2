@@ -296,7 +296,7 @@ export function downloadDrawingDxf(pageId: string) {
 
 export type SheetElement = {
   id: string
-  type: 'drawing' | 'text' | 'label' | string
+  type: 'drawing' | 'text' | 'label' | 'page' | 'meta' | string
   source?: string
   page_id?: string
   label?: string
@@ -309,6 +309,8 @@ export type SheetElement = {
   w: number
   h: number
   locked?: boolean
+  editable?: boolean
+  hidden?: boolean
 }
 
 export type SheetCanvas = {

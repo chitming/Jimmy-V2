@@ -49,17 +49,107 @@ def text_to_fields(raw_text: str) -> dict[str, str]:
     return fields
 
 
-def ocr_info_block_image(image_path: Path) -> tuple[str, dict[str, str], str]:
+def ocr_info_block_layout(image_path: Path) -> tuple[str, dict[str, str], list[dict], str]:
+    """OCR Info Block and keep approximate original layout boxes (0-1 in crop)."""
     with Image.open(image_path) as img:
         rgb = img.convert("RGB")
-        # Preserve layout a bit better for title-block tables.
-        raw = pytesseract.image_to_string(rgb, config="--psm 6")
-    raw = raw.strip()
-    return raw, text_to_fields(raw), "ocr"
+        width, height = rgb.size
+        raw = pytesseract.image_to_string(rgb, config="--psm 6").strip()
+        data = pytesseract.image_to_data(rgb, output_type=pytesseract.Output.DICT, config="--psm 6")
+
+    words: list[dict] = []
+    n = len(data.get("text") or [])
+    for i in range(n):
+        text = str(data["text"][i] or "").strip()
+        if not text:
+            continue
+        try:
+            conf = float(data["conf"][i])
+        except Exception:
+            conf = -1.0
+        if conf < 0:
+            continue
+        words.append(
+            {
+                "text": text,
+                "x": int(data["left"][i]),
+                "y": int(data["top"][i]),
+                "w": int(data["width"][i]),
+                "h": int(data["height"][i]),
+            }
+        )
+
+    # Cluster words into visual lines by vertical proximity (keeps title-block layout).
+    words.sort(key=lambda w: (w["y"], w["x"]))
+    line_groups: list[list[dict]] = []
+    for word in words:
+        cy = word["y"] + word["h"] / 2.0
+        placed = False
+        for group in line_groups:
+            gy = sum(g["y"] + g["h"] / 2.0 for g in group) / len(group)
+            gh = max(g["h"] for g in group)
+            if abs(cy - gy) <= max(8.0, gh * 0.7):
+                group.append(word)
+                placed = True
+                break
+        if not placed:
+            line_groups.append([word])
+
+    layout: list[dict] = []
+    fields: dict[str, str] = {}
+    for group in line_groups:
+        group.sort(key=lambda w: w["x"])
+        value = re.sub(r"\s+", " ", " ".join(w["text"] for w in group)).strip(" .-:")
+        if not value:
+            continue
+        if fields and list(fields.values())[-1].lower() == value.lower():
+            continue
+        x0 = min(w["x"] for w in group)
+        y0 = min(w["y"] for w in group)
+        x1 = max(w["x"] + w["w"] for w in group)
+        y1 = max(w["y"] + w["h"] for w in group)
+        key = f"Field{len(fields) + 1}"
+        box = {
+            "x": max(0.0, x0 / float(width)),
+            "y": max(0.0, y0 / float(height)),
+            "w": max(0.02, (x1 - x0) / float(width)),
+            "h": max(0.02, (y1 - y0) / float(height)),
+        }
+        box["w"] = min(box["w"], 1.0 - box["x"])
+        box["h"] = min(box["h"], 1.0 - box["y"])
+        # Keep field height compact for editable overlays.
+        box["h"] = min(box["h"], 0.12)
+        fields[key] = value
+        layout.append({"key": key, "text": value, "box": box})
+
+    if not fields:
+        fields = text_to_fields(raw)
+        n = max(len(fields), 1)
+        for index, (key, value) in enumerate(fields.items(), start=1):
+            layout.append(
+                {
+                    "key": key,
+                    "text": value,
+                    "box": {
+                        "x": 0.04,
+                        "y": 0.04 + (index - 1) * (0.9 / n),
+                        "w": 0.92,
+                        "h": max(0.04, 0.85 / n),
+                    },
+                }
+            )
+
+    return raw or "\n".join(fields.values()), fields, layout, "ocr"
+
+
+def ocr_info_block_image(image_path: Path) -> tuple[str, dict[str, str], str]:
+    raw, fields, _layout, method = ocr_info_block_layout(image_path)
+    return raw, fields, method
 
 
 def _row_payload(row) -> dict:
     fields = loads(row["fields_json"])
+    layout = loads(row["layout_json"]) if "layout_json" in row.keys() and row["layout_json"] else []
     return {
         "id": row["id"],
         "segment_id": row["segment_id"],
@@ -69,6 +159,7 @@ def _row_payload(row) -> dict:
         "page_index": row["page_index"],
         "raw_text": row["raw_text"],
         "fields": fields,
+        "layout": layout,
         "field_count": row["field_count"],
         "method": row["method"],
         "created_at": row["created_at"],
@@ -118,7 +209,7 @@ def ocr_all_info_blocks() -> dict:
             continue
 
         try:
-            raw_text, fields, method = ocr_info_block_image(image_path)
+            raw_text, fields, layout, method = ocr_info_block_layout(image_path)
         except Exception as exc:  # noqa: BLE001 - collect and continue
             errors.append({"segment_id": seg["id"], "error": str(exc)})
             continue
@@ -134,7 +225,7 @@ def ocr_all_info_blocks() -> dict:
                     UPDATE info_block_rows
                     SET source_filename = ?, segment_filename = ?, page_index = ?,
                         raw_text = ?, fields_json = ?, field_count = ?, method = ?,
-                        updated_at = ?
+                        layout_json = ?, updated_at = ?
                     WHERE segment_id = ?
                     """,
                     (
@@ -145,6 +236,7 @@ def ocr_all_info_blocks() -> dict:
                         dumps(fields),
                         len(fields),
                         method,
+                        dumps(layout),
                         now,
                         seg["id"],
                     ),
@@ -157,8 +249,8 @@ def ocr_all_info_blocks() -> dict:
                     INSERT INTO info_block_rows
                     (id, segment_id, page_id, source_filename, segment_filename,
                      page_index, raw_text, fields_json, field_count, method,
-                     created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     layout_json, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         row_id,
@@ -171,6 +263,7 @@ def ocr_all_info_blocks() -> dict:
                         dumps(fields),
                         len(fields),
                         method,
+                        dumps(layout),
                         now,
                         now,
                     ),

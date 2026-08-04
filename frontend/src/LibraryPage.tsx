@@ -223,9 +223,9 @@ export function LibraryPage() {
       <section className="panel" style={{ marginBottom: 22 }}>
         <h2>Sheet canvas · working space</h2>
         <p className="help">
-          Put Stream A + Stream B results back onto one <strong>A3 landscape</strong> sheet
-          (horizontal by default). Drawing on top; Working space as a table along the bottom.
-          More tools come later.
+          Put Stream A + Stream B results back onto one <strong>A3 landscape</strong> sheet.
+          White canvas scales with the browser; Stream A text follows the original file layout
+          as an editable duplicate.
         </p>
         <div className="nav-actions" style={{ marginTop: 14 }}>
           <button

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
-from ..db import connect, dumps, loads, new_id, utc_now
-from .drawing_ocr import get_drawing_ocr_run
-from .info_block_excel import list_info_block_rows
+from pathlib import Path
+
+from ..db import LIBRARY_DIR, connect, dumps, loads, new_id, utc_now
+from .drawing_ocr import get_drawing_ocr_run, list_drawing_ocr_runs
+from .info_block_excel import list_info_block_rows, ocr_info_block_layout
 
 # ISO A3 in millimetres. Default orientation is landscape (horizontal).
 A3_PORTRAIT_MM = (297.0, 420.0)
@@ -14,87 +16,211 @@ def _paper_mm(orientation: str) -> tuple[float, float]:
     return A3_LANDSCAPE_MM if orientation == "landscape" else A3_PORTRAIT_MM
 
 
+def _contain_fit(content_w: float, content_h: float, frame_w: float, frame_h: float) -> dict:
+    """Fit content into frame with letterboxing (normalized 0-1 frame coords)."""
+    if content_w <= 0 or content_h <= 0:
+        return {"x": 0.0, "y": 0.0, "w": 1.0, "h": 1.0}
+    scale = min(frame_w / content_w, frame_h / content_h)
+    w = content_w * scale / frame_w
+    h = content_h * scale / frame_h
+    return {"x": (1.0 - w) / 2.0, "y": (1.0 - h) / 2.0, "w": w, "h": h}
+
+
+def _page_context(page_id: str) -> dict | None:
+    with connect() as conn:
+        page = conn.execute("SELECT * FROM pages WHERE id = ?", (page_id,)).fetchone()
+        if page is None:
+            return None
+        annotation = conn.execute(
+            "SELECT information_block, drawing_canvas FROM annotations WHERE page_id = ?",
+            (page_id,),
+        ).fetchone()
+    image_name = Path(page["image_path"]).name
+    return {
+        "page_id": page_id,
+        "width": int(page["width"]),
+        "height": int(page["height"]),
+        "image_path": page["image_path"],
+        "image_url": f"/media/pages/{image_name}",
+        "information_block": loads(annotation["information_block"]) if annotation else None,
+        "drawing_canvas": loads(annotation["drawing_canvas"]) if annotation else None,
+    }
+
+
+def _info_layout_items(info_row: dict) -> list[dict]:
+    layout = info_row.get("layout") or []
+    if layout:
+        return layout
+
+    # Re-OCR crop for layout if older rows have no boxes yet.
+    image_path = LIBRARY_DIR / "Info Block" / info_row["segment_filename"]
+    if image_path.exists():
+        try:
+            _raw, _fields, layout, _method = ocr_info_block_layout(image_path)
+            return layout
+        except Exception:
+            pass
+
+    fields = info_row.get("fields") or {}
+    n = max(len(fields), 1)
+    items = []
+    for index, (key, value) in enumerate(fields.items(), start=1):
+        items.append(
+            {
+                "key": key,
+                "text": value,
+                "box": {
+                    "x": 0.04,
+                    "y": 0.04 + (index - 1) * (0.9 / n),
+                    "w": 0.92,
+                    "h": max(0.04, 0.85 / n),
+                },
+            }
+        )
+    return items
+
+
 def _default_elements(
     *,
     page_id: str,
     info_row: dict | None,
     drawing_run: dict | None,
 ) -> list[dict]:
-    """Place Stream B drawing on top and Stream A info as a bottom table strip."""
+    """Build an editable duplicate of the original page on A3 paper.
+
+    - Background = original page image, fitted into A3
+    - Stream A fields placed using original Info Block layout boxes
+    """
     elements: list[dict] = []
+    ctx = _page_context(page_id)
+    paper_w, paper_h = A3_LANDSCAPE_MM  # normalized frame is always 1x1
 
-    has_info = bool(info_row)
-    # Drawing fills most of the sheet; leave a bottom band for the info table.
-    drawing_h = 0.72 if has_info else 0.90
-    if drawing_run:
-        image_url = drawing_run.get("preview_url") or drawing_run.get("image_url")
+    if ctx:
+        fit = _contain_fit(float(ctx["width"]), float(ctx["height"]), paper_w, paper_h)
         elements.append(
             {
-                "id": "el_drawing",
-                "type": "drawing",
-                "source": "stream_b",
+                "id": "el_page",
+                "type": "page",
+                "source": "original",
                 "page_id": page_id,
-                "label": "Drawing (Stream B)",
-                "image_url": image_url,
-                "dxf_url": drawing_run.get("dxf_url"),
-                "x": 0.03,
-                "y": 0.03,
-                "w": 0.94,
-                "h": drawing_h,
-                "locked": False,
+                "label": "Original sheet",
+                "image_url": ctx["image_url"],
+                "x": fit["x"],
+                "y": fit["y"],
+                "w": fit["w"],
+                "h": fit["h"],
+                "locked": True,
             }
         )
 
-    # Info Block as a horizontal table along the bottom of the drawing canvas.
-    if info_row:
-        fields = info_row.get("fields") or {}
-        field_items = sorted(
-            ((k, v) for k, v in fields.items() if str(v).strip()),
-            key=lambda kv: int(kv[0].replace("Field", "") or 0),
-        )
-        if not field_items and info_row.get("raw_text"):
-            field_items = [("Field1", str(info_row["raw_text"])[:240])]
-
-        table_y = 0.78
-        table_h = 0.18
-        label_h = 0.045
-        cell_y = table_y + label_h
-        cell_h = table_h - label_h - 0.01
-        n = max(len(field_items), 1)
-        cell_w = 0.94 / n
-
-        elements.append(
-            {
-                "id": "el_info_header",
-                "type": "label",
-                "source": "stream_a",
-                "page_id": page_id,
-                "label": "Info Block",
-                "text": "INFO BLOCK / WORKING SPACE",
-                "x": 0.03,
-                "y": table_y,
-                "w": 0.94,
-                "h": label_h,
-                "locked": False,
-            }
-        )
-        for index, (key, value) in enumerate(field_items):
+        info_box = ctx.get("information_block")
+        if info_row and info_box:
+            for index, item in enumerate(_info_layout_items(info_row), start=1):
+                local = item["box"]
+                # Map crop-local box → page-normalized → fitted A3 paper coords.
+                page_x = float(info_box["x"]) + float(local["x"]) * float(info_box["w"])
+                page_y = float(info_box["y"]) + float(local["y"]) * float(info_box["h"])
+                page_bw = float(local["w"]) * float(info_box["w"])
+                page_bh = float(local["h"]) * float(info_box["h"])
+                elements.append(
+                    {
+                        "id": f"el_info_{index}",
+                        "type": "text",
+                        "source": "stream_a",
+                        "page_id": page_id,
+                        "label": item.get("key") or f"Field{index}",
+                        "field_key": item.get("key") or f"Field{index}",
+                        "text": str(item.get("text") or ""),
+                        "x": fit["x"] + page_x * fit["w"],
+                        "y": fit["y"] + page_y * fit["h"],
+                        "w": max(0.02, page_bw * fit["w"]),
+                        "h": max(0.018, page_bh * fit["h"]),
+                        "locked": False,
+                        "editable": True,
+                    }
+                )
+        elif info_row:
+            # No taught Info Block box — still place fields over lower-right AEC default.
+            fallback = {"x": 0.62, "y": 0.58, "w": 0.34, "h": 0.36}
+            for index, item in enumerate(_info_layout_items(info_row), start=1):
+                local = item["box"]
+                elements.append(
+                    {
+                        "id": f"el_info_{index}",
+                        "type": "text",
+                        "source": "stream_a",
+                        "page_id": page_id,
+                        "label": item.get("key") or f"Field{index}",
+                        "field_key": item.get("key") or f"Field{index}",
+                        "text": str(item.get("text") or ""),
+                        "x": fit["x"] + (fallback["x"] + local["x"] * fallback["w"]) * fit["w"],
+                        "y": fit["y"] + (fallback["y"] + local["y"] * fallback["h"]) * fit["h"],
+                        "w": max(0.02, local["w"] * fallback["w"] * fit["w"]),
+                        "h": max(0.018, local["h"] * fallback["h"] * fit["h"]),
+                        "locked": False,
+                        "editable": True,
+                    }
+                )
+    else:
+        # Fallback when page raster is missing: Stream B preview + stacked Stream A.
+        if drawing_run:
+            image_url = drawing_run.get("preview_url") or drawing_run.get("image_url")
             elements.append(
                 {
-                    "id": f"el_info_{index + 1}",
-                    "type": "text",
-                    "source": "stream_a",
+                    "id": "el_drawing",
+                    "type": "drawing",
+                    "source": "stream_b",
                     "page_id": page_id,
-                    "label": key,
-                    "field_key": key,
-                    "text": str(value),
-                    "x": 0.03 + index * cell_w,
-                    "y": cell_y,
-                    "w": cell_w * 0.98,
-                    "h": cell_h,
-                    "locked": False,
+                    "label": "Drawing (Stream B)",
+                    "image_url": image_url,
+                    "dxf_url": drawing_run.get("dxf_url"),
+                    "x": 0.03,
+                    "y": 0.03,
+                    "w": 0.94,
+                    "h": 0.94,
+                    "locked": True,
                 }
             )
+        if info_row:
+            for index, item in enumerate(_info_layout_items(info_row), start=1):
+                box = item["box"]
+                elements.append(
+                    {
+                        "id": f"el_info_{index}",
+                        "type": "text",
+                        "source": "stream_a",
+                        "page_id": page_id,
+                        "label": item.get("key") or f"Field{index}",
+                        "field_key": item.get("key") or f"Field{index}",
+                        "text": str(item.get("text") or ""),
+                        "x": float(box["x"]),
+                        "y": float(box["y"]),
+                        "w": float(box["w"]),
+                        "h": float(box["h"]),
+                        "locked": False,
+                        "editable": True,
+                    }
+                )
+
+    # Keep Stream B DXF link metadata on a hidden helper element when page duplicate is used.
+    if ctx and drawing_run and drawing_run.get("dxf_url"):
+        elements.append(
+            {
+                "id": "el_dxf_link",
+                "type": "meta",
+                "source": "stream_b",
+                "page_id": page_id,
+                "label": "DXF",
+                "text": "Stream B DXF linked",
+                "dxf_url": drawing_run.get("dxf_url"),
+                "x": 0.01,
+                "y": 0.01,
+                "w": 0.001,
+                "h": 0.001,
+                "locked": True,
+                "hidden": True,
+            }
+        )
 
     return elements
 
@@ -137,14 +263,12 @@ def compose_sheet_canvas(
     *,
     orientation: str = "landscape",
 ) -> dict:
-    """Compose Stream A + Stream B results onto one A3 sheet (landscape default)."""
+    """Compose an editable duplicate of each original sheet onto A3 paper."""
     if orientation not in {"landscape", "portrait"}:
         raise ValueError("orientation must be landscape or portrait")
 
     info_rows = list_info_block_rows()
     drawing_runs_by_page: dict[str, dict] = {}
-    from .drawing_ocr import list_drawing_ocr_runs
-
     for run in list_drawing_ocr_runs():
         drawing_runs_by_page[run["page_id"]] = run
 

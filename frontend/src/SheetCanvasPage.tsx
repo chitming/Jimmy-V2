@@ -18,6 +18,7 @@ type DragState = {
 function sourceLabel(el: SheetElement) {
   if (el.source === 'stream_a') return 'Stream A'
   if (el.source === 'stream_b') return 'Stream B'
+  if (el.source === 'original') return 'Original'
   return el.type
 }
 
@@ -36,7 +37,8 @@ export function SheetCanvasPage() {
     const data = await getSheetCanvas(sheetId)
     setSheet(data)
     setElements(data.elements)
-    setSelectedId(data.elements[0]?.id ?? null)
+    const firstEditable = data.elements.find((el) => el.type === 'text')
+    setSelectedId(firstEditable?.id ?? data.elements[0]?.id ?? null)
   }
 
   useEffect(() => {
@@ -45,19 +47,19 @@ export function SheetCanvasPage() {
     load().catch((err) => setError(err.message))
   }, [sheetId])
 
-  const selected = useMemo(
-    () => elements.find((el) => el.id === selectedId) ?? null,
-    [elements, selectedId],
-  )
-
   const paper = sheet?.paper
   const isLandscape = (paper?.orientation || 'landscape') === 'landscape'
-  const tableRows = useMemo(
-    () => elements.filter((el) => el.type !== 'drawing'),
+
+  const visibleElements = useMemo(
+    () => elements.filter((el) => !el.hidden && el.type !== 'meta'),
     [elements],
   )
-  const drawingEl = useMemo(
-    () => elements.find((el) => el.type === 'drawing') ?? null,
+  const tableRows = useMemo(
+    () => elements.filter((el) => el.type === 'text' || el.type === 'label'),
+    [elements],
+  )
+  const dxfLinked = useMemo(
+    () => elements.some((el) => Boolean(el.dxf_url)),
     [elements],
   )
 
@@ -66,7 +68,7 @@ export function SheetCanvasPage() {
   }
 
   function onPointerDown(event: ReactPointerEvent, el: SheetElement) {
-    if (el.locked) return
+    if (el.locked || el.type === 'page') return
     event.preventDefault()
     event.stopPropagation()
     setSelectedId(el.id)
@@ -180,17 +182,16 @@ export function SheetCanvasPage() {
         <div className="sheet-stage-wrap">
           <div
             ref={paperRef}
-            className={`sheet-paper${isLandscape ? ' landscape' : ' portrait'}`}
+            className={`sheet-paper sheet-paper-fluid${isLandscape ? ' landscape' : ' portrait'}`}
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}
             onPointerLeave={onPointerUp}
             onClick={() => setSelectedId(null)}
           >
-            <div className="sheet-margin-guide" />
-            {elements.map((el) => (
+            {visibleElements.map((el) => (
               <div
                 key={el.id}
-                className={`sheet-el sheet-el-${el.type}${selectedId === el.id ? ' active' : ''}`}
+                className={`sheet-el sheet-el-${el.type}${selectedId === el.id ? ' active' : ''}${el.locked ? ' locked' : ''}`}
                 style={{
                   left: `${el.x * 100}%`,
                   top: `${el.y * 100}%`,
@@ -200,20 +201,25 @@ export function SheetCanvasPage() {
                 onPointerDown={(event) => onPointerDown(event, el)}
                 onClick={(event) => {
                   event.stopPropagation()
-                  setSelectedId(el.id)
+                  if (el.type !== 'page') setSelectedId(el.id)
                 }}
               >
-                {el.type === 'drawing' && el.image_url ? (
-                  <img src={el.image_url} alt={el.label || 'Drawing'} draggable={false} />
+                {(el.type === 'page' || el.type === 'drawing') && el.image_url ? (
+                  <img src={el.image_url} alt={el.label || 'Sheet'} draggable={false} />
                 ) : null}
-                {(el.type === 'text' || el.type === 'label') && (
-                  <div className="sheet-el-text">
-                    {el.type === 'text' && el.label ? (
-                      <strong className="sheet-el-fieldkey">{el.label}</strong>
-                    ) : null}
-                    {el.text || ''}
-                  </div>
-                )}
+                {el.type === 'text' || el.type === 'label' ? (
+                  <textarea
+                    className="sheet-el-edit"
+                    value={el.text || ''}
+                    onChange={(e) => updateElement(el.id, { text: e.target.value })}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setSelectedId(el.id)
+                    }}
+                    spellCheck={false}
+                  />
+                ) : null}
               </div>
             ))}
           </div>
@@ -224,7 +230,8 @@ export function SheetCanvasPage() {
           </div>
           <p className="help sheet-caption">
             {sheet.title} · {paper.width_mm} × {paper.height_mm} mm
-            {drawingEl?.dxf_url ? ' · Stream B DXF linked' : ''}
+            {dxfLinked ? ' · Stream B DXF linked' : ''}
+            {' · editable duplicate of original layout'}
           </p>
         </div>
 
@@ -233,7 +240,8 @@ export function SheetCanvasPage() {
             <div>
               <h2>Working space</h2>
               <p>
-                Table under the drawing canvas. Edit Stream A fields here; more tools later.
+                Stream A fields follow the original file layout on the sheet above. Edit
+                on the canvas or in this table.
               </p>
             </div>
           </div>
@@ -271,7 +279,6 @@ export function SheetCanvasPage() {
                         value={el.text || ''}
                         onChange={(e) => updateElement(el.id, { text: e.target.value })}
                         onClick={(e) => e.stopPropagation()}
-                        disabled={el.type === 'drawing'}
                       />
                     </td>
                     <td className="sheet-pos-cell">
@@ -281,20 +288,12 @@ export function SheetCanvasPage() {
                 ))}
                 {tableRows.length === 0 && (
                   <tr>
-                    <td colSpan={5}>No working-space rows yet. Compose Stream A + B first.</td>
+                    <td colSpan={5}>No Stream A fields yet. Run Info Block OCR, then compose again.</td>
                   </tr>
                 )}
               </tbody>
             </table>
           </div>
-          {selected?.type === 'drawing' && (
-            <p className="help" style={{ marginTop: 10 }}>
-              Drawing selected on canvas. Stream B preview sits above this table.
-            </p>
-          )}
-          <p className="help" style={{ marginTop: 10 }}>
-            Tools coming next: snap, align, measure, export PDF.
-          </p>
         </section>
       </div>
 
