@@ -182,7 +182,7 @@ export function SheetCanvasPage() {
         <div className="sheet-stage-wrap">
           <div
             ref={paperRef}
-            className={`sheet-paper sheet-paper-fluid${isLandscape ? ' landscape' : ' portrait'}`}
+            className={`sheet-paper${isLandscape ? ' landscape' : ' portrait'}`}
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}
             onPointerLeave={onPointerUp}

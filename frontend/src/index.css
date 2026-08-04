@@ -751,9 +751,11 @@ code {
 
 .sheet-paper {
   position: relative;
-  width: min(96vw, 100%);
-  max-width: none;
-  max-height: min(72vh, 860px);
+  /* Fit browser window while locking A3 aspect — never stretch. */
+  width: min(100%, 96vw, calc((72vh - 2rem) * 420 / 297));
+  height: auto;
+  max-width: 100%;
+  max-height: none;
   background: #f4f7f8;
   color: #122028;
   border: 1px solid rgba(140, 196, 214, 0.35);
@@ -765,12 +767,12 @@ code {
 
 .sheet-paper.landscape {
   aspect-ratio: 420 / 297;
+  width: min(100%, 96vw, calc((72vh - 2rem) * 420 / 297));
 }
 
 .sheet-paper.portrait {
   aspect-ratio: 297 / 420;
-  max-width: min(70vw, 640px);
-  max-height: min(78vh, 920px);
+  width: min(70vw, 640px, calc((78vh - 2rem) * 297 / 420));
 }
 
 .sheet-flip-bar {
@@ -810,7 +812,8 @@ code {
 .sheet-el-drawing img {
   width: 100%;
   height: 100%;
-  object-fit: fill;
+  object-fit: contain;
+  object-position: center;
   display: block;
   pointer-events: none;
 }
