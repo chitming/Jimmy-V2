@@ -94,8 +94,8 @@ Optional: place a fine-tuned weights file at `backend/data/models/aec_symbols.pt
 After Stream A and Stream B:
 
 1. Click **Compose A3 sheet canvas**
-2. Stream B drawing sits on top of an **A3 landscape** sheet; Stream A fields form a **table along the bottom**
-3. Open the working canvas to edit the bottom table / drag items (more tools later)
+2. The white paper scales with the browser and shows an **editable duplicate of the original page**
+3. Stream A text is placed in the **original Info Block layout**; edit on the canvas or in the Working space table
 
 ## How learning works (v1)
 
