@@ -127,7 +127,7 @@ export function LibraryPage() {
       const result = await composeSheetCanvas(undefined, 'landscape')
       setSheets(result.all_sheets)
       setMessage(
-        `Sheet canvas ready: ${result.processed} A3 landscape sheet${result.processed === 1 ? '' : 's'}.`,
+        `Deconstruct worktop ready: ${result.processed} sheet${result.processed === 1 ? '' : 's'} (lines + text).`,
       )
       if (result.sheets[0]) {
         navigate(result.sheets[0].edit_url)
@@ -221,11 +221,10 @@ export function LibraryPage() {
       </section>
 
       <section className="panel" style={{ marginBottom: 22 }}>
-        <h2>Sheet canvas · working space</h2>
+        <h2>Sheet canvas · deconstruct worktop</h2>
         <p className="help">
-          Put Stream A + Stream B results back onto one <strong>A3 landscape</strong> sheet.
-          White canvas scales with the browser; Stream A text follows the original file layout
-          as an editable duplicate.
+          Break Stream B into editable <strong>lines</strong> and <strong>text</strong> on an A3
+          landscape worktop (plus Stream A fields). Drag, edit, or delete parts.
         </p>
         <div className="nav-actions" style={{ marginTop: 14 }}>
           <button
@@ -233,7 +232,7 @@ export function LibraryPage() {
             disabled={busy || (rows.length === 0 && drawingRuns.length === 0)}
             onClick={() => void onComposeSheet()}
           >
-            {busy ? 'Composing…' : 'Compose A3 sheet canvas'}
+            {busy ? 'Composing…' : 'Compose deconstruct worktop'}
           </button>
         </div>
         {sheets.length > 0 && (

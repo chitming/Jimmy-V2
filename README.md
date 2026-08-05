@@ -89,13 +89,14 @@ Export to DXF
 
 Optional: place a fine-tuned weights file at `backend/data/models/aec_symbols.pt` to replace YOLO-World open-vocab detection.
 
-## Sheet canvas — working space
+## Sheet canvas — deconstruct worktop
 
 After Stream A and Stream B:
 
-1. Click **Compose A3 sheet canvas**
-2. The white paper scales with the browser and shows an **editable duplicate of the original page**
-3. Stream A text is placed in the **original Info Block layout**; edit on the canvas or in the Working space table
+1. Click **Compose deconstruct worktop**
+2. Stream B is broken into editable **lines**, **circles**, and **text** on A3 landscape paper
+3. Stream A Info Block fields are included as editable text
+4. Drag parts, edit text, delete unwanted geometry; Save sheet when done
 
 ## How learning works (v1)
 

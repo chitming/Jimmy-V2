@@ -80,147 +80,243 @@ def _info_layout_items(info_row: dict) -> list[dict]:
     return items
 
 
+def _map_drawing_point(
+    px: float,
+    py: float,
+    *,
+    draw_w: float,
+    draw_h: float,
+    draw_box: dict | None,
+    fit: dict,
+) -> tuple[float, float]:
+    """Map a Stream B pixel into A3 paper-normalized coordinates."""
+    nx = float(px) / max(draw_w, 1.0)
+    ny = float(py) / max(draw_h, 1.0)
+    if draw_box:
+        page_x = float(draw_box["x"]) + nx * float(draw_box["w"])
+        page_y = float(draw_box["y"]) + ny * float(draw_box["h"])
+        return fit["x"] + page_x * fit["w"], fit["y"] + page_y * fit["h"]
+    return fit["x"] + nx * fit["w"], fit["y"] + ny * fit["h"]
+
+
+def _line_bounds(x1: float, y1: float, x2: float, y2: float) -> dict:
+    pad = 0.004
+    xmin, xmax = sorted((x1, x2))
+    ymin, ymax = sorted((y1, y2))
+    return {
+        "x": max(0.0, xmin - pad),
+        "y": max(0.0, ymin - pad),
+        "w": max(0.008, xmax - xmin + 2 * pad),
+        "h": max(0.008, ymax - ymin + 2 * pad),
+    }
+
+
 def _default_elements(
     *,
     page_id: str,
     info_row: dict | None,
     drawing_run: dict | None,
 ) -> list[dict]:
-    """Build an editable duplicate of the original page on A3 paper.
+    """Build a deconstruct drawing worktop on A3 paper.
 
-    - Background = original page image, fitted into A3
-    - Stream A fields placed using original Info Block layout boxes
+    Breaks Stream B into editable lines/circles/text, plus Stream A text,
+    so the user can modify geometry and annotations on the sheet.
     """
     elements: list[dict] = []
     ctx = _page_context(page_id)
-    paper_w, paper_h = A3_LANDSCAPE_MM  # normalized frame is always 1x1
+    paper_w, paper_h = A3_LANDSCAPE_MM
 
+    # Fit frame: prefer full page when available, else drawing crop.
     if ctx:
         fit = _contain_fit(float(ctx["width"]), float(ctx["height"]), paper_w, paper_h)
+        ref_url = ctx["image_url"]
+        draw_box = ctx.get("drawing_canvas")
+    elif drawing_run:
+        dw = float(drawing_run.get("image_width") or 1)
+        dh = float(drawing_run.get("image_height") or 1)
+        fit = _contain_fit(dw, dh, paper_w, paper_h)
+        ref_url = drawing_run.get("cleaned_url") or drawing_run.get("preview_url") or drawing_run.get("image_url")
+        draw_box = None
+    else:
+        fit = {"x": 0.03, "y": 0.03, "w": 0.94, "h": 0.94}
+        ref_url = None
+        draw_box = None
+
+    # Dim reference raster under deconstructed vectors.
+    if ref_url:
         elements.append(
             {
-                "id": "el_page",
+                "id": "el_reference",
                 "type": "page",
                 "source": "original",
                 "page_id": page_id,
-                "label": "Original sheet",
-                "image_url": ctx["image_url"],
+                "label": "Reference raster",
+                "image_url": ref_url,
                 "x": fit["x"],
                 "y": fit["y"],
                 "w": fit["w"],
                 "h": fit["h"],
                 "locked": True,
+                "opacity": 0.18,
             }
         )
 
-        info_box = ctx.get("information_block")
-        if info_row and info_box:
-            for index, item in enumerate(_info_layout_items(info_row), start=1):
-                local = item["box"]
-                # Map crop-local box → page-normalized → fitted A3 paper coords.
-                page_x = float(info_box["x"]) + float(local["x"]) * float(info_box["w"])
-                page_y = float(info_box["y"]) + float(local["y"]) * float(info_box["h"])
-                page_bw = float(local["w"]) * float(info_box["w"])
-                page_bh = float(local["h"]) * float(info_box["h"])
-                elements.append(
-                    {
-                        "id": f"el_info_{index}",
-                        "type": "text",
-                        "source": "stream_a",
-                        "page_id": page_id,
-                        "label": item.get("key") or f"Field{index}",
-                        "field_key": item.get("key") or f"Field{index}",
-                        "text": str(item.get("text") or ""),
-                        "x": fit["x"] + page_x * fit["w"],
-                        "y": fit["y"] + page_y * fit["h"],
-                        "w": max(0.02, page_bw * fit["w"]),
-                        "h": max(0.018, page_bh * fit["h"]),
-                        "locked": False,
-                        "editable": True,
-                    }
-                )
-        elif info_row:
-            # No taught Info Block box — still place fields over lower-right AEC default.
-            fallback = {"x": 0.62, "y": 0.58, "w": 0.34, "h": 0.36}
-            for index, item in enumerate(_info_layout_items(info_row), start=1):
-                local = item["box"]
-                elements.append(
-                    {
-                        "id": f"el_info_{index}",
-                        "type": "text",
-                        "source": "stream_a",
-                        "page_id": page_id,
-                        "label": item.get("key") or f"Field{index}",
-                        "field_key": item.get("key") or f"Field{index}",
-                        "text": str(item.get("text") or ""),
-                        "x": fit["x"] + (fallback["x"] + local["x"] * fallback["w"]) * fit["w"],
-                        "y": fit["y"] + (fallback["y"] + local["y"] * fallback["h"]) * fit["h"],
-                        "w": max(0.02, local["w"] * fallback["w"] * fit["w"]),
-                        "h": max(0.018, local["h"] * fallback["h"] * fit["h"]),
-                        "locked": False,
-                        "editable": True,
-                    }
-                )
-    else:
-        # Fallback when page raster is missing: Stream B preview + stacked Stream A.
-        if drawing_run:
-            image_url = drawing_run.get("preview_url") or drawing_run.get("image_url")
+    # --- Stream B deconstruction: lines, circles, annotation text ---
+    if drawing_run:
+        vectors = drawing_run.get("vectors") or {}
+        dw = float(drawing_run.get("image_width") or 1)
+        dh = float(drawing_run.get("image_height") or 1)
+        map_kwargs = {"draw_w": dw, "draw_h": dh, "draw_box": draw_box, "fit": fit}
+
+        for index, line in enumerate(vectors.get("lines") or [], start=1):
+            x1, y1 = _map_drawing_point(line["x1"], line["y1"], **map_kwargs)
+            x2, y2 = _map_drawing_point(line["x2"], line["y2"], **map_kwargs)
+            bounds = _line_bounds(x1, y1, x2, y2)
             elements.append(
                 {
-                    "id": "el_drawing",
-                    "type": "drawing",
+                    "id": f"el_line_{index}",
+                    "type": "line",
                     "source": "stream_b",
                     "page_id": page_id,
-                    "label": "Drawing (Stream B)",
-                    "image_url": image_url,
-                    "dxf_url": drawing_run.get("dxf_url"),
-                    "x": 0.03,
-                    "y": 0.03,
-                    "w": 0.94,
-                    "h": 0.94,
-                    "locked": True,
+                    "label": f"Line {index}",
+                    "x1": x1,
+                    "y1": y1,
+                    "x2": x2,
+                    "y2": y2,
+                    "length": float(line.get("length") or 0),
+                    **bounds,
+                    "locked": False,
+                    "editable": True,
                 }
             )
-        if info_row:
-            for index, item in enumerate(_info_layout_items(info_row), start=1):
-                box = item["box"]
-                elements.append(
-                    {
-                        "id": f"el_info_{index}",
-                        "type": "text",
-                        "source": "stream_a",
-                        "page_id": page_id,
-                        "label": item.get("key") or f"Field{index}",
-                        "field_key": item.get("key") or f"Field{index}",
-                        "text": str(item.get("text") or ""),
-                        "x": float(box["x"]),
-                        "y": float(box["y"]),
-                        "w": float(box["w"]),
-                        "h": float(box["h"]),
-                        "locked": False,
-                        "editable": True,
-                    }
-                )
 
-    # Keep Stream B DXF link metadata on a hidden helper element when page duplicate is used.
-    if ctx and drawing_run and drawing_run.get("dxf_url"):
-        elements.append(
-            {
-                "id": "el_dxf_link",
-                "type": "meta",
-                "source": "stream_b",
-                "page_id": page_id,
-                "label": "DXF",
-                "text": "Stream B DXF linked",
-                "dxf_url": drawing_run.get("dxf_url"),
-                "x": 0.01,
-                "y": 0.01,
-                "w": 0.001,
-                "h": 0.001,
-                "locked": True,
-                "hidden": True,
-            }
-        )
+        for index, circle in enumerate(vectors.get("circles") or [], start=1):
+            cx, cy = _map_drawing_point(circle["cx"], circle["cy"], **map_kwargs)
+            # Radius: map a point on the rim and take delta.
+            rx, _ry = _map_drawing_point(
+                float(circle["cx"]) + float(circle["r"]),
+                float(circle["cy"]),
+                **map_kwargs,
+            )
+            r = abs(rx - cx)
+            elements.append(
+                {
+                    "id": f"el_circle_{index}",
+                    "type": "circle",
+                    "source": "stream_b",
+                    "page_id": page_id,
+                    "label": f"Circle {index}",
+                    "cx": cx,
+                    "cy": cy,
+                    "r": r,
+                    "x": max(0.0, cx - r),
+                    "y": max(0.0, cy - r),
+                    "w": min(1.0, 2 * r),
+                    "h": min(1.0, 2 * r),
+                    "locked": False,
+                    "editable": True,
+                }
+            )
+
+        for index, item in enumerate(drawing_run.get("items") or [], start=1):
+            box = item.get("box") or {}
+            # OCR boxes are already normalized to the drawing crop.
+            if draw_box:
+                page_x = float(draw_box["x"]) + float(box.get("x", 0)) * float(draw_box["w"])
+                page_y = float(draw_box["y"]) + float(box.get("y", 0)) * float(draw_box["h"])
+                page_w = float(box.get("w", 0.04)) * float(draw_box["w"])
+                page_h = float(box.get("h", 0.02)) * float(draw_box["h"])
+                x = fit["x"] + page_x * fit["w"]
+                y = fit["y"] + page_y * fit["h"]
+                w = max(0.02, page_w * fit["w"])
+                h = max(0.015, page_h * fit["h"])
+            else:
+                x = fit["x"] + float(box.get("x", 0)) * fit["w"]
+                y = fit["y"] + float(box.get("y", 0)) * fit["h"]
+                w = max(0.02, float(box.get("w", 0.04)) * fit["w"])
+                h = max(0.015, float(box.get("h", 0.02)) * fit["h"])
+            elements.append(
+                {
+                    "id": f"el_btext_{index}",
+                    "type": "text",
+                    "source": "stream_b",
+                    "page_id": page_id,
+                    "label": f"Drawing text {index}",
+                    "text": str(item.get("text") or ""),
+                    "x": x,
+                    "y": y,
+                    "w": w,
+                    "h": h,
+                    "locked": False,
+                    "editable": True,
+                }
+            )
+
+        if drawing_run.get("dxf_url"):
+            elements.append(
+                {
+                    "id": "el_dxf_link",
+                    "type": "meta",
+                    "source": "stream_b",
+                    "page_id": page_id,
+                    "label": "DXF",
+                    "text": "Stream B DXF linked",
+                    "dxf_url": drawing_run.get("dxf_url"),
+                    "x": 0.01,
+                    "y": 0.01,
+                    "w": 0.001,
+                    "h": 0.001,
+                    "locked": True,
+                    "hidden": True,
+                }
+            )
+
+    # --- Stream A Info Block text (original layout when available) ---
+    if info_row and ctx and ctx.get("information_block"):
+        info_box = ctx["information_block"]
+        for index, item in enumerate(_info_layout_items(info_row), start=1):
+            local = item["box"]
+            page_x = float(info_box["x"]) + float(local["x"]) * float(info_box["w"])
+            page_y = float(info_box["y"]) + float(local["y"]) * float(info_box["h"])
+            page_bw = float(local["w"]) * float(info_box["w"])
+            page_bh = float(local["h"]) * float(info_box["h"])
+            elements.append(
+                {
+                    "id": f"el_info_{index}",
+                    "type": "text",
+                    "source": "stream_a",
+                    "page_id": page_id,
+                    "label": item.get("key") or f"Field{index}",
+                    "field_key": item.get("key") or f"Field{index}",
+                    "text": str(item.get("text") or ""),
+                    "x": fit["x"] + page_x * fit["w"],
+                    "y": fit["y"] + page_y * fit["h"],
+                    "w": max(0.02, page_bw * fit["w"]),
+                    "h": max(0.015, page_bh * fit["h"]),
+                    "locked": False,
+                    "editable": True,
+                }
+            )
+    elif info_row:
+        for index, item in enumerate(_info_layout_items(info_row), start=1):
+            box = item["box"]
+            elements.append(
+                {
+                    "id": f"el_info_{index}",
+                    "type": "text",
+                    "source": "stream_a",
+                    "page_id": page_id,
+                    "label": item.get("key") or f"Field{index}",
+                    "field_key": item.get("key") or f"Field{index}",
+                    "text": str(item.get("text") or ""),
+                    "x": float(box["x"]),
+                    "y": float(box["y"]),
+                    "w": float(box["w"]),
+                    "h": float(box["h"]),
+                    "locked": False,
+                    "editable": True,
+                }
+            )
 
     return elements
 
@@ -263,7 +359,7 @@ def compose_sheet_canvas(
     *,
     orientation: str = "landscape",
 ) -> dict:
-    """Compose an editable duplicate of each original sheet onto A3 paper."""
+    """Compose a deconstruct drawing worktop (lines + text) onto A3 paper."""
     if orientation not in {"landscape", "portrait"}:
         raise ValueError("orientation must be landscape or portrait")
 
@@ -298,7 +394,7 @@ def compose_sheet_canvas(
             title_bits.append(info_row.get("source_filename") or pid)
         elif drawing_run:
             title_bits.append(drawing_run.get("source_filename") or pid)
-        title = f"A3 sheet · {title_bits[0]}"
+        title = f"Deconstruct worktop · {title_bits[0]}"
 
         paper = {
             "size": PAPER_SIZE,
