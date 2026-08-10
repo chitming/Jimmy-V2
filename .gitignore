@@ -16,3 +16,5 @@ __pycache__/
 .env.*
 
 tools/**/node_modules/
+dist/
+installer/windows/app/

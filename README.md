@@ -16,7 +16,20 @@ Teachable layout software for technical drawings.
 
 ## Quick start
 
-### Backend
+### Windows installer
+
+1. Download **`TDR-Windows-Setup.zip`** (from the release/PR artifacts, or build it below)
+2. Unzip, then double-click **`setup.bat`**
+3. Start TDR from the Desktop shortcut → opens http://127.0.0.1:8000/
+
+Build the zip on a dev machine:
+
+```bash
+./scripts/build-windows-package.sh
+# → dist/TDR-Windows-Setup.zip
+```
+
+### Backend (dev)
 
 ```bash
 cd backend
@@ -28,7 +41,7 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 System dependency for OCR: `tesseract-ocr`
 
-### Frontend
+### Frontend (dev)
 
 ```bash
 cd frontend
@@ -37,6 +50,8 @@ npm run dev
 ```
 
 Open http://localhost:5173
+
+When `frontend/dist` (or `backend/app/static`) exists, the API also serves the UI at http://127.0.0.1:8000/
 
 ## Segment library
 

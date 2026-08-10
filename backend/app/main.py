@@ -636,3 +636,41 @@ def page_image(page_id: str):
     if page is None:
         raise HTTPException(404, "Page not found")
     return FileResponse(page["image_path"])
+
+
+def _frontend_dist() -> Path | None:
+    """Locate packaged UI (installer) or local Vite build output."""
+    candidates = [
+        Path(__file__).resolve().parent / "static",
+        Path(__file__).resolve().parents[2] / "frontend" / "dist",
+        Path(__file__).resolve().parents[1] / "frontend" / "dist",
+    ]
+    for path in candidates:
+        if (path / "index.html").is_file():
+            return path
+    return None
+
+
+_UI_DIST = _frontend_dist()
+if _UI_DIST is not None:
+    assets_dir = _UI_DIST / "assets"
+    if assets_dir.is_dir():
+        app.mount("/assets", StaticFiles(directory=assets_dir), name="ui-assets")
+
+    @app.get("/")
+    def ui_index():
+        return FileResponse(_UI_DIST / "index.html")
+
+    @app.get("/{full_path:path}")
+    def ui_spa(full_path: str):
+        # API/media mounts and routes take precedence; this is SPA fallback only.
+        if full_path.startswith(("api/", "media/", "docs", "openapi", "redoc")):
+            raise HTTPException(404, "Not found")
+        candidate = (_UI_DIST / full_path).resolve()
+        try:
+            candidate.relative_to(_UI_DIST.resolve())
+        except ValueError:
+            raise HTTPException(404, "Not found") from None
+        if candidate.is_file():
+            return FileResponse(candidate)
+        return FileResponse(_UI_DIST / "index.html")
