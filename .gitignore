@@ -9,6 +9,7 @@ backend/data/models/*.pt
 backend/data/*.db
 frontend/node_modules/
 frontend/dist/
+backend/app/static/
 __pycache__/
 *.pyc
 .DS_Store
