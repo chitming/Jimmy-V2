@@ -2,14 +2,15 @@ TDR — Technical Drawing Reader (Windows)
 
 Docker (recommended)
 --------------------
-If you have Docker Desktop:
-  1. Install Docker Desktop for Windows
-  2. In a terminal at the repo root:
-       docker compose up --build
-  3. Open http://localhost:8000/
+If you have Docker Desktop, clone and run as container "jimmy-v2":
 
-Faster slim image (limited Stream B):
-       docker compose --profile slim up --build
+  git clone -b cursor/sheetsense-layout-mvp-f8ab https://github.com/chitming/Jimmy-V2.git %USERPROFILE%\Jimmy-V2
+  cd %USERPROFILE%\Jimmy-V2
+  powershell -ExecutionPolicy Bypass -File .\scripts\Clone-JimmyV2-Docker.ps1 -SkipClone -Profile slim
+
+Or:
+  docker compose --profile slim up --build -d
+  open http://localhost:8000/
 
 Native Windows installer
 ------------------------

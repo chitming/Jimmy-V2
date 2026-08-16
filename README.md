@@ -16,28 +16,38 @@ Teachable layout software for technical drawings.
 
 ## Quick start
 
-### Docker (recommended on Windows / Mac / Linux)
+### Docker — run as **jimmy-v2** (recommended on Windows / Mac / Linux)
 
 Requires [Docker Desktop](https://www.docker.com/products/docker-desktop/) (Windows/Mac) or Docker Engine + Compose (Linux).
 
-```bash
-docker compose up --build
+**One-shot on Windows (clone + build + run):**
+
+```powershell
+# From anywhere, after downloading Clone-JimmyV2-Docker.ps1 from the repo scripts/ folder,
+# or after cloning once:
+git clone -b cursor/sheetsense-layout-mvp-f8ab https://github.com/chitming/Jimmy-V2.git "%USERPROFILE%\Jimmy-V2"
+cd "%USERPROFILE%\Jimmy-V2"
+powershell -ExecutionPolicy Bypass -File .\scripts\Clone-JimmyV2-Docker.ps1 -SkipClone -Profile slim
 ```
 
-Open http://localhost:8000/ — the API serves the UI. Drawing data persists in the `tdr-data` volume.
+**Or manually:**
+
+```bash
+git clone -b cursor/sheetsense-layout-mvp-f8ab https://github.com/chitming/Jimmy-V2.git
+cd Jimmy-V2
+docker compose --profile slim up --build -d   # container name: jimmy-v2-slim
+# full stack:
+# docker compose up --build -d                # container name: jimmy-v2
+```
+
+Open http://localhost:8000/ — image/container project name is **jimmy-v2**. Data persists in volume `jimmy-v2-data`.
 
 ```bash
 docker compose down          # stop
 docker compose down -v       # stop and delete saved data
 ```
 
-First build downloads Python ML wheels (PaddleOCR / Ultralytics) and can take several minutes.
-
-Faster trial without the full ML stack:
-
-```bash
-docker compose --profile slim up --build
-```
+First **full** build downloads Python ML wheels (PaddleOCR / Ultralytics) and can take several minutes. Prefer `--profile slim` for a quicker first run.
 
 ### Windows installer (no Docker)
 
