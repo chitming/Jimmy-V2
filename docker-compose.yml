@@ -1,0 +1,44 @@
+# Jimmy-V2 (TDR) — Docker Compose
+#
+# Full stack:
+#   docker compose up --build
+#
+# Slim (faster):
+#   docker compose --profile slim up --build
+#
+# Open http://localhost:8000/
+
+name: jimmy-v2
+
+services:
+  jimmy-v2:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: jimmy-v2:latest
+    container_name: jimmy-v2
+    ports:
+      - "8000:8000"
+    volumes:
+      - jimmy-v2-data:/app/data
+    restart: unless-stopped
+    environment:
+      - TZ=UTC
+
+  jimmy-v2-slim:
+    profiles: ["slim"]
+    build:
+      context: .
+      dockerfile: Dockerfile.slim
+    image: jimmy-v2:slim
+    container_name: jimmy-v2-slim
+    ports:
+      - "8000:8000"
+    volumes:
+      - jimmy-v2-data:/app/data
+    restart: unless-stopped
+    environment:
+      - TZ=UTC
+
+volumes:
+  jimmy-v2-data:

@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>DWF Viewer (VM)</title>
+    <link rel="stylesheet" href="./node_modules/@flyfish-dev/dwf-viewer/styles/dwf-viewer.css" />
+    <style>
+      :root {
+        font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+        color: #e8f2f6;
+        background: #07131a;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: linear-gradient(165deg, #07131a, #0d2430);
+      }
+      header {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        justify-content: space-between;
+        padding: 16px 20px;
+        border-bottom: 1px solid rgba(140, 196, 214, 0.22);
+      }
+      h1 {
+        margin: 0;
+        font-size: 1.2rem;
+      }
+      .hint {
+        color: #8eacb8;
+        font-size: 0.9rem;
+      }
+      #viewer {
+        height: calc(100vh - 72px);
+        width: 100%;
+        background: #02080c;
+      }
+      input[type="file"] {
+        color: #e8f2f6;
+      }
+      button {
+        border: 0;
+        border-radius: 8px;
+        padding: 8px 12px;
+        background: #2ec4b6;
+        color: #04201d;
+        font-weight: 650;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div>
+        <h1>DWF / DWFx Viewer</h1>
+        <div class="hint">Open Autodesk DWF or DWFx files in this VM browser viewer.</div>
+      </div>
+      <div>
+        <input id="file" type="file" accept=".dwf,.dwfx,application/octet-stream" />
+      </div>
+    </header>
+    <div id="viewer"></div>
+    <script type="module">
+      import { DwfViewer } from './node_modules/@flyfish-dev/dwf-viewer/dist/index.js';
+
+      const viewer = new DwfViewer(document.getElementById('viewer'), {
+        wasmUrl: './node_modules/@flyfish-dev/dwf-viewer/public/dwfv-render.wasm',
+        preferWebgl: true,
+        preferWasm: true,
+      });
+
+      document.getElementById('file').addEventListener('change', async (event) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+        await viewer.load(file);
+      });
+    </script>
+  </body>
+</html>
