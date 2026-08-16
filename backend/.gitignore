@@ -1,0 +1,12 @@
+data/uploads/
+data/pages/
+data/crops/
+data/library/
+data/pipeline/
+data/exports/
+data/models/*.pt
+data/*.db
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
