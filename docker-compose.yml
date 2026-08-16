@@ -1,0 +1,42 @@
+# TDR — run with Docker Desktop (Windows/Mac) or Docker Engine (Linux)
+#
+# Full stack (PaddleOCR / Ultralytics — slower first build):
+#   docker compose up --build
+#
+# Slim stack (faster; Stream B OCR/symbols limited):
+#   docker compose --profile slim up --build
+#
+# Open http://localhost:8000/
+
+services:
+  tdr:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: tdr:0.1.0
+    container_name: tdr
+    ports:
+      - "8000:8000"
+    volumes:
+      - tdr-data:/app/data
+    restart: unless-stopped
+    environment:
+      - TZ=UTC
+
+  tdr-slim:
+    profiles: ["slim"]
+    build:
+      context: .
+      dockerfile: Dockerfile.slim
+    image: tdr:slim
+    container_name: tdr-slim
+    ports:
+      - "8000:8000"
+    volumes:
+      - tdr-data:/app/data
+    restart: unless-stopped
+    environment:
+      - TZ=UTC
+
+volumes:
+  tdr-data:

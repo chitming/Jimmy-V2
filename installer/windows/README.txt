@@ -1,7 +1,18 @@
 TDR — Technical Drawing Reader (Windows)
 
-Install
--------
+Docker (recommended)
+--------------------
+If you have Docker Desktop:
+  1. Install Docker Desktop for Windows
+  2. In a terminal at the repo root:
+       docker compose up --build
+  3. Open http://localhost:8000/
+
+Faster slim image (limited Stream B):
+       docker compose --profile slim up --build
+
+Native Windows installer
+------------------------
 1. Unzip TDR-Windows-Setup.zip to a folder (e.g. Downloads\TDR-Windows)
 2. Double-click setup.bat
    Or right-click Install-TDR.ps1 → Run with PowerShell
@@ -9,8 +20,8 @@ Install
 4. Use the Desktop shortcut "TDR" to start the app
 5. Browser opens at http://127.0.0.1:8000/
 
-Requirements
-------------
+Requirements (native installer)
+-------------------------------
 - Windows 10/11 (64-bit)
 - Python 3.11+ (installer can install via winget)
 - Git (needed for one optional dependency; installer can install via winget)
@@ -20,8 +31,8 @@ If winget is unavailable, install manually:
 - Python: https://www.python.org/downloads/  (enable "Add python.exe to PATH")
 - Tesseract: https://github.com/UB-Mannheim/tesseract/wiki
 
-Start / Stop
-------------
+Start / Stop (native)
+---------------------
 - Start: Desktop "TDR" shortcut, or Start-TDR.cmd in the install folder
 - Stop:  Stop-TDR.cmd
 

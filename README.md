@@ -16,7 +16,30 @@ Teachable layout software for technical drawings.
 
 ## Quick start
 
-### Windows installer
+### Docker (recommended on Windows / Mac / Linux)
+
+Requires [Docker Desktop](https://www.docker.com/products/docker-desktop/) (Windows/Mac) or Docker Engine + Compose (Linux).
+
+```bash
+docker compose up --build
+```
+
+Open http://localhost:8000/ — the API serves the UI. Drawing data persists in the `tdr-data` volume.
+
+```bash
+docker compose down          # stop
+docker compose down -v       # stop and delete saved data
+```
+
+First build downloads Python ML wheels (PaddleOCR / Ultralytics) and can take several minutes.
+
+Faster trial without the full ML stack:
+
+```bash
+docker compose --profile slim up --build
+```
+
+### Windows installer (no Docker)
 
 1. Download **`TDR-Windows-Setup.zip`** (from the release/PR artifacts, or build it below)
 2. Unzip, then double-click **`setup.bat`**
