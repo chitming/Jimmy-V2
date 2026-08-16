@@ -1,0 +1,66 @@
+TDR — Technical Drawing Reader
+================================
+Windows PC test package (v0.1.0)
+
+HOW TO INSTALL (about 5–15 minutes the first time)
+--------------------------------------------------
+1. Unzip this folder to a location you can find, for example:
+     C:\Users\<you>\Downloads\TDR-Windows
+
+2. Open that folder and double-click:
+     setup.bat
+
+   Windows may ask to run the script — choose Run / Yes.
+
+3. The installer will:
+   - Install Python 3.12, Git, and Tesseract OCR if they are missing
+     (uses winget; you may see UAC prompts — accept them)
+   - Copy TDR to:
+     %LOCALAPPDATA%\Programs\TDR
+   - Create a Python environment and download packages
+     (this is the slow step; keep the window open)
+
+4. When it finishes, a Desktop shortcut named "TDR" is created.
+   The browser should open:
+     http://127.0.0.1:8000/
+
+IF setup.bat DOES NOT START
+---------------------------
+Right-click Install-TDR.ps1 → Run with PowerShell
+or open PowerShell in this folder and run:
+
+  powershell -ExecutionPolicy Bypass -File .\Install-TDR.ps1 -StartAfterInstall
+
+WHAT YOU NEED
+-------------
+- Windows 10 or 11 (64-bit)
+- Internet (first install downloads Python packages)
+- Python 3.11+  (installer can install this)
+- Tesseract OCR (installer can install this)
+
+If winget is not available, install manually first:
+- Python: https://www.python.org/downloads/   (tick "Add python.exe to PATH")
+- Tesseract: https://github.com/UB-Mannheim/tesseract/wiki
+
+HOW TO USE AFTER INSTALL
+------------------------
+Start:  Desktop shortcut "TDR"  or  Start Menu → TDR
+Stop:   Stop-TDR.cmd in %LOCALAPPDATA%\Programs\TDR
+Uninstall: Uninstall-TDR.ps1 in the same folder
+
+In the app:
+1. Open Teach layout
+2. Upload a vector PDF or a JPG/PNG drawing
+3. Accept the Info Block + Drawing regions (or correct them first)
+4. On Segment library: OCR Info Blocks → Download Excel
+5. Optional: Run Drawing pipeline → download DXF
+6. Optional: Compose deconstruct worktop (sheet canvas)
+
+NOTES
+-----
+- This zip is small on purpose. Python/ML packages are installed on your PC,
+  not bundled inside the zip.
+- If the full AI stack (PaddleOCR / YOLO) fails to install, the installer
+  falls back to a core stack. Teaching, Excel export, and the sheet canvas
+  still work; the Drawing→DXF pipeline may be limited.
+- TDR runs only on this computer at http://127.0.0.1:8000/ (not on the internet).

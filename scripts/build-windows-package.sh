@@ -53,7 +53,7 @@ rsync -a "$ROOT/frontend/dist/" "$STAGE/app/frontend/dist/"
 mkdir -p "$STAGE/app/backend/app/static"
 rsync -a "$ROOT/frontend/dist/" "$STAGE/app/backend/app/static/"
 
-# Installer scripts
+# Installer scripts (START_HERE.txt is the first file to open after unzip)
 cp -a "$ROOT/installer/windows/." "$STAGE/"
 
 # Version stamp

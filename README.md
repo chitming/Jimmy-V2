@@ -18,9 +18,10 @@ Teachable layout software for technical drawings.
 
 ### Windows installer
 
-1. Download **`TDR-Windows-Setup.zip`** (from the release/PR artifacts, or build it below)
-2. Unzip, then double-click **`setup.bat`**
-3. Start TDR from the Desktop shortcut → opens http://127.0.0.1:8000/
+1. Download **`TDR-Windows-Setup.zip`** (from this agent’s artifacts, or build it below)
+2. Unzip and open **`START_HERE.txt`**
+3. Double-click **`setup.bat`**
+4. Start TDR from the Desktop shortcut → opens http://127.0.0.1:8000/
 
 Build the zip on a dev machine:
 
